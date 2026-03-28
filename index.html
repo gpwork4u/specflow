@@ -116,13 +116,15 @@
   <h1><span>&#9678;</span> SpecFlow</h1>
   <div class="config">
     <input id="repo" type="text" placeholder="owner/repo" />
-    <input id="token" type="password" placeholder="GitHub Token (optional)" />
+    <input id="token" type="password" placeholder="GitHub Token (private repo)" />
     <button id="loadBtn" onclick="loadDashboard()">Load</button>
+    <button id="saveBtn" onclick="saveToken()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer" title="Save token to browser localStorage">Save Token</button>
   </div>
   <div class="auto-refresh">
     <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
     <label for="autoRefresh">Auto 30s</label>
   </div>
+  <div id="authStatus" style="font-size:12px;white-space:nowrap"></div>
   <div class="last-update" id="lastUpdate"></div>
 </div>
 
@@ -139,6 +141,39 @@ let refreshTimer = null;
 let repoName = '';
 let apiHeaders = {};
 
+// Token persistence
+function saveToken() {
+  const token = document.getElementById('token').value.trim();
+  const repo = document.getElementById('repo').value.trim();
+  if (token) {
+    localStorage.setItem('specflow_token', token);
+    if (repo) localStorage.setItem('specflow_repo', repo);
+    updateAuthStatus('saved');
+  } else {
+    localStorage.removeItem('specflow_token');
+    updateAuthStatus('cleared');
+  }
+}
+
+function loadSavedConfig() {
+  const token = localStorage.getItem('specflow_token');
+  const repo = localStorage.getItem('specflow_repo');
+  if (token) document.getElementById('token').value = token;
+  if (repo && !document.getElementById('repo').value) document.getElementById('repo').value = repo;
+}
+
+function updateAuthStatus(state, extra) {
+  const el = document.getElementById('authStatus');
+  const map = {
+    authed:  `<span style="color:var(--green)">&#9679;</span> <span style="color:var(--text-muted)">Authenticated${extra ? ' &middot; ' + extra : ''}</span>`,
+    public:  `<span style="color:var(--yellow)">&#9679;</span> <span style="color:var(--text-muted)">Public only${extra ? ' &middot; ' + extra : ''}</span>`,
+    saved:   `<span style="color:var(--green)">&#9679;</span> <span style="color:var(--text-muted)">Token saved</span>`,
+    cleared: `<span style="color:var(--text-dim)">&#9679;</span> <span style="color:var(--text-muted)">Token cleared</span>`,
+    error:   `<span style="color:var(--red)">&#9679;</span> <span style="color:var(--red)">${extra || 'Auth failed'}</span>`,
+  };
+  el.innerHTML = map[state] || '';
+}
+
 function toggleAutoRefresh() {
   if (document.getElementById('autoRefresh').checked) {
     refreshTimer = setInterval(loadDashboard, 30000);
@@ -150,6 +185,21 @@ function toggleAutoRefresh() {
 
 async function api(path) {
   const res = await fetch(`https://api.github.com/${path}`, { headers: apiHeaders });
+  if (res.status === 401) {
+    updateAuthStatus('error', 'Invalid token');
+    throw new Error('Token invalid or expired. Check your GitHub Personal Access Token.');
+  }
+  if (res.status === 403) {
+    const remaining = res.headers.get('x-ratelimit-remaining');
+    if (remaining === '0') {
+      const reset = new Date(res.headers.get('x-ratelimit-reset') * 1000).toLocaleTimeString();
+      throw new Error(`Rate limit exceeded. Resets at ${reset}. Add a token for higher limits.`);
+    }
+    throw new Error('Access denied. Token may lack repo scope for this private repository.');
+  }
+  if (res.status === 404) {
+    throw new Error('Repository not found. If private, provide a token with repo scope.');
+  }
   if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
   return res.json();
 }
@@ -179,6 +229,19 @@ async function loadDashboard() {
   app.innerHTML = '<div class="loading">Loading project data</div>';
 
   try {
+    // Verify auth and show status
+    const rateCheck = await fetch('https://api.github.com/rate_limit', { headers: apiHeaders });
+    const rateData = await rateCheck.json();
+    const remaining = rateData.rate?.remaining;
+    const limit = rateData.rate?.limit;
+    const rateTxt = `${remaining}/${limit} API calls`;
+
+    if (token) {
+      updateAuthStatus('authed', rateTxt);
+    } else {
+      updateAuthStatus('public', rateTxt);
+    }
+
     const [issues, prs, milestones] = await Promise.all([
       apiAll(`repos/${repo}/issues?state=all`),
       apiAll(`repos/${repo}/pulls?state=all`),
@@ -324,11 +387,15 @@ function esc(s) {
   const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML;
 }
 
-// Auto-load from URL params
+// Load saved config from localStorage
+loadSavedConfig();
+
+// Auto-load from URL params (repo only, never token in URL)
 const params = new URLSearchParams(location.search);
 if (params.get('repo')) {
   document.getElementById('repo').value = params.get('repo');
-  if (params.get('token')) document.getElementById('token').value = params.get('token');
+  loadDashboard();
+} else if (document.getElementById('repo').value && document.getElementById('token').value) {
   loadDashboard();
 }
 
