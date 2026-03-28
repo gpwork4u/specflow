@@ -131,13 +131,18 @@ AND response body matches { "id": any(string), "field_a": "test" }
 
 ## 實作指引
 
-### 需要建立的檔案
-- `src/models/resource.ts` - data model + migration
-- `src/routes/resource.ts` - API route handlers
-- `src/validators/resource.ts` - input validation
+### 需要建立的檔案（在 `dev/` 下）
+- `dev/src/models/resource.ts` - data model + migration
+- `dev/src/routes/resource.ts` - API route handlers
+- `dev/src/validators/resource.ts` - input validation
 
-### 需要修改的檔案
-- `src/routes/index.ts` - 註冊新 route
+### 需要修改的檔案（在 `dev/` 下）
+- `dev/src/routes/index.ts` - 註冊新 route
+
+### Unit Tests（Engineer 負責，在 `dev/__tests__/` 下）
+- `dev/__tests__/models/resource.test.ts`
+- `dev/__tests__/routes/resource.test.ts`
+- `dev/__tests__/validators/resource.test.ts`
 
 ### 關鍵邏輯
 1. {邏輯描述}

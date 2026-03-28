@@ -11,35 +11,53 @@
 
 ---
 
+## 安裝
+
+在你的專案 repo 中一行指令安裝：
+
+```bash
+# 進入你的專案目錄
+cd /path/to/your/project
+
+# 從 GitHub 安裝 SpecFlow skills + agents
+git clone --depth 1 https://github.com/gpwork4u/specflow.git /tmp/specflow \
+  && cp -r /tmp/specflow/.claude . \
+  && cp /tmp/specflow/CLAUDE.md . \
+  && rm -rf /tmp/specflow \
+  && echo "✅ SpecFlow installed"
+```
+
+或者如果你想手動控制：
+
+```bash
+# 只複製 .claude/ 和 CLAUDE.md
+curl -sL https://github.com/gpwork4u/specflow/archive/refs/heads/main.tar.gz \
+  | tar xz --strip-components=1 -C . "specflow-main/.claude" "specflow-main/CLAUDE.md"
+```
+
+安裝完成後啟動 Claude Code：
+
+```bash
+claude
+
+# 首次使用：初始化 GitHub labels 和 issue templates
+/init
+
+# 開始！
+/start 我的專案名稱
+```
+
 ## 前置需求
 
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安裝
 - [GitHub CLI (`gh`)](https://cli.github.com/) 已安裝並登入
 - [agent-browser](https://github.com/vercel-labs/agent-browser) 已安裝（QA 瀏覽器測試用）
-- 目標 GitHub repo 已建立
-
-### agent-browser 安裝
+- 目標 GitHub repo 已建立且已 `git init`
 
 ```bash
+# agent-browser 安裝
 npm install -g agent-browser
-agent-browser install    # 下載 Chrome for Testing
-```
-
-## 快速開始
-
-```bash
-# 1. Clone 到你的專案目錄，或複製 .claude/ 資料夾到既有專案
-cp -r .claude/ /path/to/your/project/.claude/
-
-# 2. 進入專案，啟動 Claude Code
-cd /path/to/your/project
-claude
-
-# 3. 初始化 GitHub labels 和 templates
-/init
-
-# 4. 開始！
-/start 我的專案名稱
+agent-browser install
 ```
 
 ---
@@ -80,9 +98,9 @@ claude
 | 1. 初始化 | 建立 GitHub labels、issue templates | 自動 | 首次執行 `/init` |
 | 2. Spec 討論 | 討論需求、API contract、架構、sprint 規劃 | spec-writer | **對話互動** |
 | 3. 工作分配 | 分析依賴圖譜，開 feature + QA issues | tech-lead | 背景自動 |
-| 4a. 實作 | 認領 feature issue，獨立 worktree 開發，發 PR | engineer ×N | 背景並行 |
-| 4b. 測試撰寫 | 將 WHEN/THEN scenarios 轉為 e2e test script | qa-engineer | 背景同步 |
-| 5. 測試驗證 | 執行 e2e tests，失敗建 bug issue | qa-engineer | 背景自動 |
+| 4a. 實作 | 在 `dev/` 實作 + 撰寫 unit tests | engineer ×N | 背景並行 |
+| 4b. 測試撰寫 | 在 `test/` 撰寫 e2e + browser tests | qa-engineer | 背景同步 |
+| 5. 測試驗證 | 執行 unit + e2e + browser tests，失敗建 bug issue（附截圖）| qa-engineer | 背景自動 |
 | 5.5 三維度驗證 | Completeness + Correctness + Coherence | verifier | 背景自動 |
 | 6. Release | 確認 sprint 交付，推進下一 sprint | 自動 | **確認 release** |
 
@@ -110,11 +128,20 @@ Spec 涵蓋：技術架構、API contract、data model、business rules、**WHEN
 
 ### engineer — 軟體工程師
 
-認領 feature 或 bug issue，在獨立 worktree 分支上實作，發 PR 連結 issue。實作需滿足 spec 中所有 WHEN/THEN scenarios。
+認領 feature 或 bug issue，**在 `dev/` 目錄下**獨立 worktree 分支實作，發 PR 連結 issue。
+
+職責包含：
+- 程式碼實作（`dev/src/`）
+- **撰寫 unit tests**（`dev/__tests__/`）
+- 確保所有 WHEN/THEN scenarios 能通過
+
+**不碰 `test/` 目錄**（那是 QA 的領域）。
 
 ### qa-engineer — QA 工程師
 
-認領 QA issue，執行**雙層測試**。與 engineer 同時啟動。
+認領 QA issue，**在 `test/` 目錄下**執行雙層測試。與 engineer 同時啟動。
+
+**不碰 `dev/` 目錄**（那是 Engineer 的領域）。
 
 #### 雙層測試策略
 
@@ -370,7 +397,18 @@ your-project/
 │   │   └── f{N}-{name}.md
 │   └── changes/
 │       └── archive/
-├── tests/                        # QA 產生
+├── dev/                          # 🔧 Engineer 專屬
+│   ├── src/                      # 程式碼
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── validators/
+│   │   └── middleware/
+│   ├── __tests__/                # Unit tests（Engineer 撰寫）
+│   │   ├── models/
+│   │   ├── routes/
+│   │   └── validators/
+│   └── package.json
+├── test/                         # 🧪 QA 專屬
 │   ├── e2e/                      # API-level tests
 │   │   ├── setup.ts
 │   │   ├── helpers.ts

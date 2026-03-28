@@ -8,13 +8,33 @@
 
 ## 角色分工
 
-| 角色 | 職責 | 產出 |
-|------|------|------|
-| **spec-writer** | 與使用者討論需求和架構 | `specs/` 目錄 + Epic + Sprint issues |
-| **tech-lead** | 讀取 spec，分析依賴，開 issue | Feature issues + QA issue + `specs/dependencies.md` |
-| **engineer** | 認領 feature / bug issue，發 PR | PR（Closes #issue） |
-| **qa-engineer** | 認領 QA issue，寫 e2e test + agent-browser 瀏覽器測試 | Test PR + Bug issues（附截圖） |
-| **verifier** | 三維度驗證 sprint 交付品質 | `specs/verify-sprint-{N}.md` |
+| 角色 | 職責 | 工作目錄 | 產出 |
+|------|------|---------|------|
+| **spec-writer** | 與使用者討論需求和架構 | `specs/` | Epic + Sprint issues |
+| **tech-lead** | 讀取 spec，分析依賴，開 issue | `specs/` | Feature + QA issues |
+| **engineer** | 認領 feature / bug，寫程式 + unit test | `dev/` | PR（Closes #issue） |
+| **qa-engineer** | 認領 QA issue，寫 e2e + browser test | `test/` | Test PR + Bug issues（附截圖） |
+| **verifier** | 三維度驗證 sprint 交付品質 | `specs/` | 驗證報告 |
+
+## 目錄分區
+
+```
+project/
+├── dev/              ← 🔧 Engineer 專屬（程式碼 + unit tests）
+│   ├── src/
+│   └── __tests__/
+├── test/             ← 🧪 QA 專屬（e2e + browser tests）
+│   ├── e2e/
+│   ├── browser/
+│   └── screenshots/
+├── specs/            ← 📖 Spec（spec-writer + tech-lead 管理）
+│   ├── overview.md
+│   ├── features/
+│   ├── dependencies.md
+│   └── changes/
+```
+
+**Engineer 不碰 `test/`，QA 不碰 `dev/`。**
 
 ## 流程
 
@@ -29,48 +49,30 @@
   │                 ┌─────┴─────┐
   │                 ▼           ▼
   │           engineer ×N    qa-engineer        ← 同時啟動
-  │           認領 feature   WHEN/THEN → API test + browser test
+  │           dev/ 實作      test/ 撰寫 e2e + browser test
+  │           + unit test
   │           各自發 PR      發 test PR
   │                 └─────┬─────┘
   │                       ▼
-  │                 執行 API tests + agent-browser 瀏覽器測試
+  │                 執行 unit + e2e + browser tests
   │                       │
   │              ┌─ 失敗 → bug issue（附截圖）→ engineer 修復 → 重測 ─┐
-  │              └─ 通過 ↓                                   │
-  │                 verifier（三維度驗證）                     │
-  │                       │                                  │
-  │              ┌─ FAIL → bug issue → 修復 → 重驗 ──────────┘
+  │              └─ 通過 ↓                                          │
+  │                 verifier（三維度驗證）                            │
+  │                       │                                         │
+  │              ┌─ FAIL → bug issue → 修復 → 重驗 ─────────────────┘
   │              └─ PASS → 通知使用者
   │
 /release ──→ 關閉 milestone → 自動推進下一個 sprint
 ```
 
-## Source of Truth：`specs/` 目錄
+## 測試分工
 
-```
-specs/
-├── overview.md                  # 專案概述 + 技術架構
-├── dependencies.md              # 依賴圖譜（tech-lead 自動產生）
-├── verify-sprint-{N}.md         # 驗證報告
-├── features/
-│   ├── f001-{name}.md           # Feature spec（含 WHEN/THEN scenarios）
-│   └── f002-{name}.md
-└── changes/                     # Delta 變更（跨 sprint 修改既有功能）
-    ├── sprint-2-changes.md      # ADDED / MODIFIED / REMOVED
-    └── archive/
-```
-
-## Scenario 格式（WHEN/THEN）
-
-所有接受標準使用 scenario 格式，可直接轉為 test case：
-
-```markdown
-#### Scenario: 建立 resource 成功
-GIVEN 使用者已登入
-WHEN POST /api/v1/resource with { "field_a": "test" }
-THEN response status = 201
-AND response body matches { "id": any(string) }
-```
+| 測試類型 | 負責角色 | 目錄 | 工具 |
+|----------|---------|------|------|
+| Unit Tests | Engineer | `dev/__tests__/` | test framework |
+| API E2E Tests | QA | `test/e2e/` | test framework |
+| Browser E2E Tests | QA | `test/browser/` | agent-browser |
 
 ## GitHub Issue 架構
 
@@ -80,7 +82,7 @@ Epic #1（索引 + 架構）
 │   ├── Feature F-001 #3（engineer，含 scenarios）
 │   ├── Feature F-002 #4（engineer，含 scenarios）
 │   ├── QA Sprint 1 #5（qa，含 scenario 清單）
-│   └── Bug #8（如有，engineer）
+│   └── Bug #8（如有，附截圖，engineer）
 ```
 
 ### Labels
@@ -89,9 +91,9 @@ Epic #1（索引 + 架構）
 | `spec` | Spec 規格 |
 | `epic` | Epic 總覽 |
 | `sprint` | Sprint 追蹤 |
-| `feature` | 功能需求（engineer 工作項目） |
-| `qa` | QA 測試（qa 工作項目） |
-| `bug` | Bug（engineer 工作項目） |
+| `feature` | 功能需求（engineer） |
+| `qa` | QA 測試（qa） |
+| `bug` | Bug（engineer） |
 
 ## 指令
 
@@ -101,15 +103,6 @@ Epic #1（索引 + 架構）
 | `/start [主題]` | 啟動完整流程 | 對話確認 spec |
 | `/verify` | 三維度驗證 sprint | 不需要 |
 | `/release` | 確認 sprint release | 確認 |
-
-## 雙層測試策略
-
-| 層級 | 工具 | 時機 | 目的 |
-|------|------|------|------|
-| API Tests | test framework | 與 engineer 同時撰寫 | 驗證 API contract |
-| Browser Tests | agent-browser | engineer 完成後執行 | 驗證 UI 流程 + 截圖佐證 |
-
-Bug issue 會附上 agent-browser 截圖，讓 engineer 直觀理解問題。
 
 ## 前置工具
 

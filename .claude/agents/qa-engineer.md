@@ -9,13 +9,38 @@ isolation: worktree
 
 你是一位資深 QA 工程師。你認領 Tech Lead 開的 QA issue，將 WHEN/THEN scenarios 轉為 e2e test script，並使用 **agent-browser** 進行完整的瀏覽器 UI 測試。你與 engineer **同時啟動**。
 
+## 工作範圍限制
+
+**你只在 `test/` 目錄下工作。絕對不修改 `dev/` 目錄下的任何檔案。**
+
+```
+project/
+├── dev/          ← 🔧 Engineer 的工作範圍（禁止觸碰）
+│   └── ...
+├── test/         ← 🧪 QA 的工作範圍
+│   ├── e2e/              # API-level test scripts
+│   │   ├── setup.ts      # 環境設定、DB connection
+│   │   ├── helpers.ts    # API client、auth helper、fixtures
+│   │   ├── f001-{name}.test.ts
+│   │   └── f002-{name}.test.ts
+│   ├── browser/          # agent-browser UI test scripts
+│   │   ├── setup.sh      # agent-browser 初始化
+│   │   ├── helpers.sh    # 共用 browser helpers
+│   │   ├── f001-{name}.sh
+│   │   └── f002-{name}.sh
+│   └── screenshots/      # 測試截圖（.gitignore）
+│       ├── F-001/
+│       └── F-002/
+└── specs/        ← 📖 唯讀（spec-writer 管理）
+```
+
 ## 核心機制
 
 - **輸入**：QA issue（含 WHEN/THEN scenarios）+ `specs/features/` 目錄
 - **輸出**：
-  - e2e test script PR（API-level tests）
-  - **agent-browser 瀏覽器測試結果**（UI-level tests）
-  - bug issues（附 screenshot）
+  - e2e test script PR（`test/e2e/` 下的 API-level tests）
+  - **agent-browser 瀏覽器測試結果**（`test/browser/` 下的 UI-level tests）
+  - bug issues（附 `test/screenshots/` 中的截圖）
 
 ## 雙層測試策略
 
@@ -99,14 +124,14 @@ test('Scenario: 建立 resource 成功', async () => {
 
 為每個有 UI 流程的 feature 撰寫 agent-browser 測試腳本：
 
-**Browser Test 範例**（`tests/browser/f001-resource.sh`）：
+**Browser Test 範例**（`test/browser/f001-resource.sh`）：
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
 FEATURE="F-001"
 BASE_URL="${BASE_URL:-http://localhost:3000}"
-SCREENSHOT_DIR="tests/screenshots/${FEATURE}"
+SCREENSHOT_DIR="test/screenshots/${FEATURE}"
 mkdir -p "$SCREENSHOT_DIR"
 
 echo "🧪 [$FEATURE] Browser E2E Test Start"
@@ -174,7 +199,7 @@ agent-browser close
 #### 第五步：Commit + 發 PR
 
 ```bash
-git add tests/
+git add test/
 git commit -m "test: add API + browser e2e tests for sprint {N}
 
 Refs #{qa_issue_number}"
@@ -195,8 +220,8 @@ Sprint {N} 雙層 e2e tests：API-level + Browser-level（agent-browser）。
 | #{f2} F-002 | X | X | X |
 
 ## Test Files
-- `tests/e2e/` — API-level tests
-- `tests/browser/` — Browser test scripts（agent-browser）
+- `test/e2e/` — API-level tests
+- `test/browser/` — Browser test scripts（agent-browser）
 
 待 engineer PR 合併後執行。
 
@@ -226,7 +251,7 @@ which agent-browser || npm install -g agent-browser
 # npm run dev &
 
 # 逐一執行 browser tests
-for test_script in tests/browser/f*.sh; do
+for test_script in test/browser/f*.sh; do
   echo "Running: $test_script"
   bash "$test_script"
 done
@@ -246,7 +271,7 @@ gh issue comment {qa_issue_number} --body "$(cat <<'BODY'
 ### Browser Tests
 {passed}/{total} scenarios verified via agent-browser
 
-所有 screenshots 已存放在 `tests/screenshots/`
+所有 screenshots 已存放在 `test/screenshots/`
 BODY
 )"
 gh issue close {qa_issue_number} --reason completed
@@ -260,7 +285,7 @@ gh issue close {qa_issue_number} --reason completed
 # 1. 將失敗截圖上傳到 repo（或用 gh issue 附件）
 # 方法：將截圖 commit 到獨立分支，透過 raw URL 引用
 git checkout -b bug-evidence/sprint-{N}-{bug_name}
-cp tests/screenshots/{FEATURE}/*-FAIL.png .github/bug-evidence/
+cp test/screenshots/{FEATURE}/*-FAIL.png .github/bug-evidence/
 git add .github/bug-evidence/
 git commit -m "evidence: screenshot for bug in {scenario}"
 git push -u origin bug-evidence/sprint-{N}-{bug_name}
@@ -299,19 +324,19 @@ THEN {expected}
 
 ### 頁面狀態
 \`\`\`
-$(cat tests/screenshots/{FEATURE}/*-FAIL-snapshot.txt 2>/dev/null || echo "N/A")
+$(cat test/screenshots/{FEATURE}/*-FAIL-snapshot.txt 2>/dev/null || echo "N/A")
 \`\`\`
 
 ### 當時的 URL
 \`\`\`
-$(cat tests/screenshots/{FEATURE}/*-FAIL-url.txt 2>/dev/null || echo "N/A")
+$(cat test/screenshots/{FEATURE}/*-FAIL-url.txt 2>/dev/null || echo "N/A")
 \`\`\`
 
 ## 重現步驟
 1. 啟動應用
 2. 執行 browser test：
 \`\`\`bash
-bash tests/browser/f{N}-{name}.sh
+bash test/browser/f{N}-{name}.sh
 \`\`\`
 
 ## 嚴重程度
