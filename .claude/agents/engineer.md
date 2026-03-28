@@ -39,6 +39,7 @@ project/
 3. **Scenario 驅動**：feature 的每個 WHEN/THEN scenario 都要能通過
 4. **完成即發 PR**
 5. **只動 `dev/`**：所有程式碼、設定、migration 都在 `dev/` 下
+6. **維護 Docker Compose**：確保 `docker compose up` 能一鍵啟動完整服務
 
 ## 工作流程
 
@@ -88,6 +89,11 @@ dev/
 │   ├── models/
 │   ├── routes/
 │   └── validators/
+├── Dockerfile                   # 應用 image
+├── docker-compose.yml           # 本地實際使用（.gitignore，不入版控）
+├── docker-compose.example.yml   # 範本（入版控，供其他人複製）
+├── .env                         # 環境變數（.gitignore）
+├── .env.example                 # 環境變數範本（入版控）
 ├── package.json
 ├── tsconfig.json
 └── ...
@@ -97,8 +103,10 @@ dev/
 - 遵循 `specs/overview.md` 中定義的技術架構
 - 遵循專案既有的程式碼風格
 - **撰寫 unit tests**（放在 `dev/__tests__/`，這是 engineer 的職責）
+- **維護 docker-compose.yml**（讓服務可本地一鍵部署）
 - **自我驗證**：確認實作能滿足 spec 中所有 WHEN/THEN scenarios
 - 確認程式碼能正確編譯/執行
+- 確認 `docker compose up` 能正常啟動
 - **不觸碰 `test/` 目錄**（那是 QA 的領域）
 
 ### 第四步：Commit 並推送
@@ -117,6 +125,82 @@ git commit -m "fix: {bug 描述}
 Refs #{issue_number}"
 
 git push -u origin {branch_name}
+```
+
+### 第四步 B：維護 Docker Compose
+
+維護 `dev/docker-compose.example.yml` 作為本地部署範本（入版控）。
+實際使用的 `docker-compose.yml` 和 `.env` 由使用者從 example 複製，**不入版控**。
+
+每次新增 feature 如果引入了新的依賴服務（如 DB、Redis、MQ），都要更新 example 檔案。
+
+**docker-compose.example.yml 範例**：
+```yaml
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASS:-pass}
+      POSTGRES_DB: ${DB_NAME:-app}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-user} -d ${DB_NAME:-app}"]
+      interval: 5s
+      retries: 5
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
+```
+
+**.env.example 範例**：
+```bash
+# App
+APP_PORT=3000
+NODE_ENV=development
+
+# Database
+DATABASE_URL=postgresql://user:pass@db:5432/app
+DB_USER=user
+DB_PASS=pass
+DB_NAME=app
+DB_PORT=5432
+```
+
+**確保 .gitignore 包含**：
+```
+dev/docker-compose.yml
+dev/.env
+```
+
+**首次設定**（在 PR 說明中提示使用者）：
+```bash
+cd dev
+cp docker-compose.example.yml docker-compose.yml
+cp .env.example .env
+# 視需要修改 .env 中的值
+```
+
+**驗證**：
+```bash
+cd dev
+docker compose up -d --build
+docker compose ps  # 確認所有 service 都 healthy
+docker compose logs app --tail 20
+curl -sf http://localhost:3000/health && echo "OK" || echo "FAIL"
+docker compose down
 ```
 
 ### 第五步：建立 PR 並連結 Issue

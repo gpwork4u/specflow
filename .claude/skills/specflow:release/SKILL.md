@@ -1,6 +1,6 @@
 ---
 name: specflow:release
-description: 確認當前 sprint release，關閉 milestone，自動推進到下一個 sprint。觸發關鍵字："release", "發佈", "上線"。
+description: 確認當前 sprint release，關閉 milestone，自動推進到下一個 sprint。必須 QA 完整測試通過才能 release。觸發關鍵字："release", "發佈", "上線"。
 user-invocable: true
 allowed-tools: Read, Bash, Agent
 argument-hint: "[sprint編號]"
@@ -9,30 +9,55 @@ argument-hint: "[sprint編號]"
 # Sprint Release 確認
 
 確認當前 sprint 的交付成果，關閉 milestone，自動推進下一個 sprint。
+**QA 完整測試必須通過才能 release。**
 
 ## 流程
 
-### 第一步：Sprint 驗證
+### 第一步：Release 前置檢查（Gate）
 
-確認當前 sprint 所有工作已完成：
+**以下條件全部通過才能 release，任一未通過則阻擋：**
 
 ```bash
 SPRINT="{current_sprint}"
+BLOCK=false
 
-# 檢查是否有未關閉的 feature
-OPEN_FEATURES=$(gh issue list --label "feature" --milestone "$SPRINT" --state open --json number --jq 'length')
-
-# 檢查是否有未關閉的 bug
-OPEN_BUGS=$(gh issue list --label "bug" --milestone "$SPRINT" --state open --json number --jq 'length')
-
-# 檢查是否有未關閉的 QA
+# 1. QA issue 必須已關閉（代表完整測試通過）
 OPEN_QA=$(gh issue list --label "qa" --milestone "$SPRINT" --state open --json number --jq 'length')
+if [ "$OPEN_QA" -gt 0 ]; then
+  echo "❌ BLOCKED: QA issue 尚未關閉（完整測試未通過）"
+  BLOCK=true
+fi
 
-# 檢查是否有未合併的 PR
+# 2. 所有 feature issues 必須已關閉
+OPEN_FEATURES=$(gh issue list --label "feature" --milestone "$SPRINT" --state open --json number --jq 'length')
+if [ "$OPEN_FEATURES" -gt 0 ]; then
+  echo "❌ BLOCKED: 有 $OPEN_FEATURES 個 feature issue 未關閉"
+  BLOCK=true
+fi
+
+# 3. 所有 bug issues 必須已關閉
+OPEN_BUGS=$(gh issue list --label "bug" --milestone "$SPRINT" --state open --json number --jq 'length')
+if [ "$OPEN_BUGS" -gt 0 ]; then
+  echo "❌ BLOCKED: 有 $OPEN_BUGS 個 bug issue 未關閉"
+  BLOCK=true
+fi
+
+# 4. 所有 PR 必須已合併
 OPEN_PRS=$(gh pr list --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("feature/") or startswith("fix/") or startswith("test/"))] | length')
+if [ "$OPEN_PRS" -gt 0 ]; then
+  echo "❌ BLOCKED: 有 $OPEN_PRS 個 PR 未合併"
+  BLOCK=true
+fi
+
+# 5. 驗證報告必須存在且為 PASS
+if [ ! -f "specs/verify-sprint-{N}.md" ]; then
+  echo "❌ BLOCKED: 驗證報告不存在（請先執行 /specflow:verify）"
+  BLOCK=true
+fi
 ```
 
-如果有未完成的項目，列出清單讓使用者確認是否仍要 release。
+如果 `BLOCK=true`，列出所有阻擋項目，**不執行 release**。
+提示使用者需要先解決阻擋項目。
 
 ### 第二步：產出 Sprint 報告
 
@@ -44,16 +69,22 @@ gh issue comment {epic_number} --body "$(cat <<'BODY'
 - #{feature} F-001: {名稱} ✅
 - #{feature} F-002: {名稱} ✅
 
+### 完整測試結果
+| 測試類型 | 結果 |
+|----------|------|
+| Unit Tests | ✅ passed |
+| API E2E Tests | ✅ passed |
+| Browser Tests | ✅ passed |
+| 三維度驗證 | ✅ PASS |
+
 ### 數據摘要
 | 項目 | 數量 |
 |------|------|
 | Feature Issues | X |
 | Pull Requests | X |
-| E2E Test Cases | X |
 | Bugs 修復 | X |
 
 ### PRs
-- #{pr} {title}
 - #{pr} {title}
 BODY
 )"
@@ -85,8 +116,14 @@ NEXT_SPRINT=$(gh api repos/{owner}/{repo}/milestones --jq '[.[] | select(.state=
 如果沒有下一個 sprint：
 1. 通知使用者：「所有 sprint 已完成！專案交付完畢。」
 
-## 重要提醒
+## Release Gate 總結
 
-- 全程使用繁體中文
-- Release 前必須確認所有 feature、bug、qa issue 已關閉
-- 自動推進下一個 sprint 時，使用者不需要額外操作
+| 檢查項目 | 必須 | 來源 |
+|----------|------|------|
+| QA issue 已關閉 | ✅ | QA 完整測試通過後才會關閉 |
+| 所有 feature issues 已關閉 | ✅ | PR merge 自動關閉 |
+| 所有 bug issues 已關閉 | ✅ | fix PR merge 自動關閉 |
+| 所有 PR 已合併 | ✅ | engineer + qa 的 PR |
+| 驗證報告 PASS | ✅ | verifier 三維度檢查 |
+
+**缺任何一項都不能 release。**

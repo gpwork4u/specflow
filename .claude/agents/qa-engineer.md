@@ -278,46 +278,84 @@ gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | "[\(.path):\(
 
 ---
 
-## Phase B：執行測試（Engineer 完成後）
+## Phase B：Sprint 完整測試（Engineer 全部完成後）
+
+每個 sprint 的所有 engineer PR 合併後，QA 執行**完整測試流程**：
+用 docker compose 啟動服務 → 跑 API tests → 跑 browser tests → 產出報告。
+
+### B0. 用 Docker Compose 啟動服務
+
+```bash
+git checkout main && git pull
+
+# 從 example 建立本地部署檔案（如果還沒有）
+cd dev
+[ -f docker-compose.yml ] || cp docker-compose.example.yml docker-compose.yml
+[ -f .env ] || cp .env.example .env
+
+# 啟動完整環境
+docker compose up -d --build
+
+# 等待所有 service healthy
+echo "Waiting for services..."
+docker compose ps
+sleep 5
+
+# 確認服務可用
+until curl -sf http://localhost:3000/health > /dev/null 2>&1; do
+  echo "Waiting for app..."
+  sleep 2
+done
+echo "✅ Services ready"
+cd ..
+```
 
 ### B1. 執行 API Tests
 
 ```bash
-git checkout main && git pull
-npm test -- --testPathPattern=e2e
+# 對 docker compose 啟動的服務跑 API e2e tests
+BASE_URL=http://localhost:3000 npm test -- --testPathPattern=e2e
 ```
 
 ### B2. 執行 Browser Tests
 
 ```bash
-# 確保 agent-browser 已安裝
 which agent-browser || npm install -g agent-browser
 
-# 啟動應用（或確認已在運行）
-# npm run dev &
-
-# 逐一執行 browser tests
+# 對 docker compose 啟動的服務跑 browser tests
+export BASE_URL=http://localhost:3000
 for test_script in test/browser/f*.sh; do
   echo "Running: $test_script"
   bash "$test_script"
 done
 ```
 
-### B3. 結果處理
+### B3. 停止服務
+
+```bash
+cd dev && docker compose down && cd ..
+```
+
+### B4. 結果處理
 
 #### 全部通過
 
 ```bash
 gh issue comment {qa_issue_number} --body "$(cat <<'BODY'
-## ✅ 全部測試通過
+## ✅ Sprint {N} 完整測試通過
+
+### 測試環境
+- docker compose up（`dev/docker-compose.yml`）
+- 所有 services healthy
 
 ### API Tests
 {passed}/{total} passed
 
-### Browser Tests
-{passed}/{total} scenarios verified via agent-browser
+### Browser Tests（agent-browser）
+{passed}/{total} scenarios verified
 
-所有 screenshots 已存放在 `test/screenshots/`
+### Screenshots
+已存放在 `test/screenshots/`
 BODY
 )"
 gh issue close {qa_issue_number} --reason completed
@@ -379,10 +417,17 @@ $(cat test/screenshots/{FEATURE}/*-FAIL-url.txt 2>/dev/null || echo "N/A")
 \`\`\`
 
 ## 重現步驟
-1. 啟動應用
+1. 啟動服務：
+\`\`\`bash
+cd dev && docker compose up -d --build && cd ..
+\`\`\`
 2. 執行 browser test：
 \`\`\`bash
-bash test/browser/f{N}-{name}.sh
+BASE_URL=http://localhost:3000 bash test/browser/f{N}-{name}.sh
+\`\`\`
+3. 停止服務：
+\`\`\`bash
+cd dev && docker compose down && cd ..
 \`\`\`
 
 ## 嚴重程度

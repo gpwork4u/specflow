@@ -54,7 +54,8 @@ project/
   │           各自發 PR      發 test PR
   │                 └─────┬─────┘
   │                       ▼
-  │                 執行 unit + e2e + browser tests
+  │                 Sprint 完整測試
+  │                 docker compose up → unit + API + browser tests
   │                       │
   │              ┌─ 失敗 → bug issue（附截圖）→ engineer 修復 → 重測 ─┐
   │              └─ 通過 ↓                                          │
@@ -63,7 +64,8 @@ project/
   │              ┌─ FAIL → bug issue → 修復 → 重驗 ─────────────────┘
   │              └─ PASS → 通知使用者
   │
-/release ──→ 關閉 milestone → 自動推進下一個 sprint
+/release ──→ Release Gate（QA 通過 + verify PASS 才放行）
+         ──→ 關閉 milestone → 自動推進下一個 sprint
 ```
 
 ## 測試分工

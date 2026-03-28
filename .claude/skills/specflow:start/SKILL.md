@@ -66,12 +66,15 @@ Wave 2（有依賴）：等 Wave 1 完成
 Agent(subagent_type="qa-engineer", run_in_background=true, isolation="worktree")
 ```
 
-### Phase 5：測試驗證（全部完成後自動）
+### Phase 5：Sprint 完整測試（全部完成後自動）
 
-所有 engineer PR + QA test PR 完成後：
-1. 執行 e2e tests
-2. 全部通過 → Phase 5.5
-3. 有失敗 → QA 建 bug issue → engineer 修復 → 重測（最多 3 輪）
+所有 engineer PR + QA test PR 完成後，QA 執行 sprint 完整測試：
+1. 用 `dev/docker-compose.yml` 啟動完整服務環境
+2. 對跑起來的服務執行 API e2e tests
+3. 對跑起來的服務執行 agent-browser browser tests
+4. 停止服務
+5. 全部通過 → Phase 5.5
+6. 有失敗 → QA 建 bug issue（附截圖）→ engineer 修復 → 重測（最多 3 輪）
 
 ### Phase 5.5：三維度驗證（背景自動）
 
@@ -91,12 +94,20 @@ Verifier 檢查：
 
 ### Phase 6：Sprint 完成通知（使用者確認）
 
+**只有 QA 完整測試通過 + 三維度驗證通過才會進到這一步。**
+
 ```
 ✅ Sprint {N} 完成！
 
 📊 摘要：
-Features: X | PRs: X | E2E Tests: X passed | Bugs fixed: X
-Verify: PASS ✅
+Features: X | PRs: X | Bugs fixed: X
+
+🧪 完整測試結果（docker compose 環境）：
+  Unit Tests: X passed
+  API E2E Tests: X passed
+  Browser Tests: X passed (agent-browser)
+
+✅ Verify: PASS（Completeness + Correctness + Coherence）
 
 驗證報告：specs/verify-sprint-{N}.md
 請使用 /specflow:release 確認發佈。
