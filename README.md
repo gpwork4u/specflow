@@ -219,15 +219,97 @@ tech-lead ───讀取────────┘
 
 ## 並行執行策略
 
-Tech Lead 分析 feature 間的依賴關係後，engineer agents 採用 wave-based 並行：
+多個 engineer 和 qa-engineer 同時對**同一個 repo** 進行開發，透過 **git worktree** 隔離彼此的工作區，避免開發打架。
+
+### Git Worktree 機制
 
 ```
-Wave 1（無依賴）：Feature A, Feature B, QA ── 全部同時啟動
+your-project/                          ← 主 worktree（main branch）
+│
+├── .git/worktrees/
+│   ├── agent-engineer-1/              ← Engineer A 的 worktree
+│   ├── agent-engineer-2/              ← Engineer B 的 worktree
+│   └── agent-qa/                      ← QA 的 worktree
+│
+/tmp/.claude-worktrees/
+├── specflow-feature-3-user-auth/      ← Engineer A 工作目錄（branch: feature/3-user-auth）
+├── specflow-feature-4-crud-api/       ← Engineer B 工作目錄（branch: feature/4-crud-api）
+└── specflow-test-sprint-1-e2e/        ← QA 工作目錄（branch: test/sprint-1-e2e）
+```
+
+每個 agent 啟動時，Claude Code 自動：
+1. 從主 repo 建立一個 **git worktree**（獨立的工作目錄 + 獨立的 branch）
+2. Agent 在自己的 worktree 中自由讀寫檔案、執行指令
+3. 完成後 push branch、發 PR
+4. Worktree 自動清理（如果沒有未提交的變更）
+
+### 為什麼用 Worktree 而不是 Clone？
+
+| | Worktree | Clone |
+|---|----------|-------|
+| **磁碟空間** | 共用 `.git` objects，幾乎不佔額外空間 | 完整複製一份 repo |
+| **同步** | 同一個 repo，branch/remote 自動共享 | 需要手動同步 |
+| **衝突** | 各自獨立 branch，push 時才需要解決 | 同上 |
+| **清理** | 自動回收 | 需要手動刪除 |
+
+### Wave-Based 並行調度
+
+Tech Lead 分析 feature 間的依賴關係後，orchestrator 分批啟動 agent：
+
+```
+Wave 1（無依賴）：
+┌─────────────────────────────────────────────────────┐
+│  Engineer A        Engineer B        QA Engineer    │
+│  worktree: /tmp/a  worktree: /tmp/b  worktree: /tmp/q │
+│  branch: feature/3 branch: feature/4 branch: test/1│
+│  issue: #3         issue: #4         issue: #5     │
+│                                                     │
+│  ──── 同時背景執行，互不干擾 ────                     │
+└─────────────────────────────────────────────────────┘
                          │
-Wave 2（有依賴）：Feature C（依賴 A）── 等 Wave 1 完成後啟動
+                    全部完成後
+                         │
+Wave 2（有依賴）：
+┌─────────────────────────────────────────────────────┐
+│  Engineer C                                         │
+│  worktree: /tmp/c                                   │
+│  branch: feature/7                                  │
+│  issue: #7（依賴 #3 的 data model）                   │
+└─────────────────────────────────────────────────────┘
+                         │
+                    全部完成後
+                         │
+                  QA 執行 e2e tests
 ```
 
-每個 engineer agent 運行在獨立的 git worktree 中，互不干擾。
+### Agent 定義中的 Worktree 設定
+
+在 `.claude/agents/*.md` 的 frontmatter 中：
+
+```yaml
+# engineer.md / qa-engineer.md
+isolation: worktree   # 每次啟動自動建立獨立 worktree
+```
+
+Orchestrator 啟動 agent 時的呼叫方式：
+
+```
+# 每個 engineer 一個獨立的背景 worktree agent
+Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
+Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
+
+# QA 也是獨立 worktree，與 engineer 同時啟動
+Agent(subagent_type="qa-engineer", run_in_background=true, isolation="worktree")
+```
+
+### 衝突處理
+
+因為每個 agent 都在自己的 branch 上開發，正常情況下不會衝突。可能的例外：
+
+- **多個 feature 修改同一個檔案**（如 `routes/index.ts` 註冊新 route）→ PR merge 時 GitHub 會標示衝突，需要人工或後續 agent 處理
+- **QA 和 engineer 都修改 `package.json`**（如新增 test dependency）→ 同上
+
+Tech Lead 在分析依賴時會盡量避免這類情況，將可能衝突的 feature 安排在不同 wave。
 
 ---
 
