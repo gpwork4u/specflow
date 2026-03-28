@@ -15,7 +15,15 @@
 
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安裝
 - [GitHub CLI (`gh`)](https://cli.github.com/) 已安裝並登入
+- [agent-browser](https://github.com/vercel-labs/agent-browser) 已安裝（QA 瀏覽器測試用）
 - 目標 GitHub repo 已建立
+
+### agent-browser 安裝
+
+```bash
+npm install -g agent-browser
+agent-browser install    # 下載 Chrome for Testing
+```
 
 ## 快速開始
 
@@ -106,15 +114,49 @@ Spec 涵蓋：技術架構、API contract、data model、business rules、**WHEN
 
 ### qa-engineer — QA 工程師
 
-認領 QA issue，將 WHEN/THEN scenarios **直接轉為 e2e test script 程式碼**。與 engineer 同時啟動，不需等實作完成。
+認領 QA issue，執行**雙層測試**。與 engineer 同時啟動。
 
-**轉換規則**：
-| Scenario | Test Code |
-|----------|-----------|
-| GIVEN | test setup / beforeEach |
-| WHEN | API call / action |
-| THEN | expect assertion |
-| AND | additional expect |
+#### 雙層測試策略
+
+| 層級 | 工具 | 時機 | 目的 |
+|------|------|------|------|
+| **API Tests** | test framework | 與 engineer 同時撰寫 | 驗證 API contract 正確性 |
+| **Browser Tests** | [agent-browser](https://github.com/vercel-labs/agent-browser) | engineer 完成後執行 | 驗證完整 UI 流程和使用者體驗 |
+
+#### WHEN/THEN → Test 轉換
+
+| Scenario | API Test | Browser Test |
+|----------|----------|-------------|
+| GIVEN | test setup | `agent-browser open` + login |
+| WHEN | API call | `agent-browser fill` / `click` |
+| THEN | `expect()` | `agent-browser wait --text` + `screenshot` |
+
+#### agent-browser 核心循環
+
+```bash
+agent-browser open "$URL"              # 導航
+agent-browser wait --load networkidle  # 等待載入
+agent-browser snapshot -i              # 取得元素 @ref
+agent-browser fill @e1 "value"         # 互動
+agent-browser click @e2                # 點擊
+agent-browser wait --load networkidle  # 等待結果
+agent-browser snapshot -i              # 重新取得 @ref（DOM 變了！）
+agent-browser screenshot "result.png"  # 截圖
+```
+
+#### Bug Issue 附截圖
+
+測試失敗時，agent-browser 自動截圖，截圖會附在 bug issue 中：
+
+```markdown
+## Screenshot（測試失敗時的畫面）
+![Bug Screenshot](screenshot-url)
+
+## 頁面狀態
+（agent-browser snapshot 輸出）
+```
+
+讓 engineer 不需重現就能直觀理解問題。
 
 ### verifier — 驗證專家
 
@@ -213,7 +255,7 @@ Epic #1（索引 + 架構）
 │   ├── Feature F-001 #3（engineer，含 scenarios）
 │   ├── Feature F-002 #4（engineer，含 scenarios）
 │   ├── QA Sprint 1 #5（qa，含 scenario 清單）
-│   └── Bug #8（如有，engineer）
+│   └── Bug #8（如有，附截圖，engineer）
 ├── Sprint 2 #6
 │   └── ...
 ```
@@ -328,6 +370,16 @@ your-project/
 │   │   └── f{N}-{name}.md
 │   └── changes/
 │       └── archive/
+├── tests/                        # QA 產生
+│   ├── e2e/                      # API-level tests
+│   │   ├── setup.ts
+│   │   ├── helpers.ts
+│   │   └── f{N}-{name}.test.ts
+│   ├── browser/                  # agent-browser UI tests
+│   │   ├── setup.sh
+│   │   ├── helpers.sh
+│   │   └── f{N}-{name}.sh
+│   └── screenshots/              # 測試截圖（.gitignore）
 ├── .github/                      # /init 建立
 │   ├── ISSUE_TEMPLATE/
 │   └── PULL_REQUEST_TEMPLATE.md

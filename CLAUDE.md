@@ -13,7 +13,7 @@
 | **spec-writer** | 與使用者討論需求和架構 | `specs/` 目錄 + Epic + Sprint issues |
 | **tech-lead** | 讀取 spec，分析依賴，開 issue | Feature issues + QA issue + `specs/dependencies.md` |
 | **engineer** | 認領 feature / bug issue，發 PR | PR（Closes #issue） |
-| **qa-engineer** | 認領 QA issue，寫 e2e test | Test PR + Bug issues |
+| **qa-engineer** | 認領 QA issue，寫 e2e test + agent-browser 瀏覽器測試 | Test PR + Bug issues（附截圖） |
 | **verifier** | 三維度驗證 sprint 交付品質 | `specs/verify-sprint-{N}.md` |
 
 ## 流程
@@ -29,13 +29,13 @@
   │                 ┌─────┴─────┐
   │                 ▼           ▼
   │           engineer ×N    qa-engineer        ← 同時啟動
-  │           認領 feature   WHEN/THEN → test script
+  │           認領 feature   WHEN/THEN → API test + browser test
   │           各自發 PR      發 test PR
   │                 └─────┬─────┘
   │                       ▼
-  │                 執行 e2e tests
+  │                 執行 API tests + agent-browser 瀏覽器測試
   │                       │
-  │              ┌─ 失敗 → bug issue → engineer 修復 → 重測 ─┐
+  │              ┌─ 失敗 → bug issue（附截圖）→ engineer 修復 → 重測 ─┐
   │              └─ 通過 ↓                                   │
   │                 verifier（三維度驗證）                     │
   │                       │                                  │
@@ -101,6 +101,19 @@ Epic #1（索引 + 架構）
 | `/start [主題]` | 啟動完整流程 | 對話確認 spec |
 | `/verify` | 三維度驗證 sprint | 不需要 |
 | `/release` | 確認 sprint release | 確認 |
+
+## 雙層測試策略
+
+| 層級 | 工具 | 時機 | 目的 |
+|------|------|------|------|
+| API Tests | test framework | 與 engineer 同時撰寫 | 驗證 API contract |
+| Browser Tests | agent-browser | engineer 完成後執行 | 驗證 UI 流程 + 截圖佐證 |
+
+Bug issue 會附上 agent-browser 截圖，讓 engineer 直觀理解問題。
+
+## 前置工具
+
+- [agent-browser](https://github.com/vercel-labs/agent-browser) — `npm install -g agent-browser && agent-browser install`
 
 ## 語言
 
