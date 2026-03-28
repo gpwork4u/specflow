@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecFlow Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-muted: #8b949e; --text-dim: #484f58;
+    --green: #3fb950; --blue: #58a6ff; --purple: #bc8cff;
+    --red: #f85149; --yellow: #d29922; --cyan: #39d2c0;
+    --green-bg: #0f2d1a; --blue-bg: #0c2d6b; --purple-bg: #271052;
+    --red-bg: #3d1214; --yellow-bg: #2d2306;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; }
+  .header h1 span { color: var(--cyan); }
+  .config { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 300px; }
+  .config input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 6px; font-size: 14px; }
+  .config input:first-of-type { flex: 1; min-width: 200px; }
+  .config input:last-of-type { width: 200px; }
+  .config button { background: var(--green); color: #000; border: none; padding: 6px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .config button:hover { opacity: 0.9; }
+  .config button:disabled { opacity: 0.5; cursor: wait; }
+  .auto-refresh { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .auto-refresh input[type=checkbox] { accent-color: var(--green); }
+  .last-update { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+
+  /* Layout */
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  /* Sprint */
+  .sprint-section { margin-bottom: 24px; }
+  .sprint-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 12px; }
+  .sprint-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .sprint-title { font-size: 16px; font-weight: 600; }
+  .sprint-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .sprint-badge.open { background: var(--green-bg); color: var(--green); }
+  .sprint-badge.closed { background: var(--purple-bg); color: var(--purple); }
+  .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+  .progress-fill.green { background: var(--green); }
+  .progress-fill.blue { background: var(--blue); }
+  .progress-text { font-size: 12px; color: var(--text-muted); }
+
+  /* Pipeline */
+  .pipeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .pipeline-col { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .pipeline-col-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .pipeline-col-header .count { background: var(--border); color: var(--text-muted); font-size: 11px; padding: 1px 8px; border-radius: 10px; }
+  .pipeline-col-body { padding: 8px; max-height: 500px; overflow-y: auto; }
+
+  /* Issue Cards */
+  .issue-card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s; }
+  .issue-card:hover { border-color: var(--text-dim); }
+  .issue-card-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; line-height: 1.4; }
+  .issue-card-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .label { font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; line-height: 1.6; }
+  .label-feature { background: #1d76db30; color: var(--blue); }
+  .label-bug { background: #f8514930; color: var(--red); }
+  .label-qa { background: #d876e330; color: var(--purple); }
+  .label-spec { background: #0e8a1630; color: var(--green); }
+  .label-sprint { background: #c5def530; color: var(--cyan); }
+  .issue-number { font-size: 11px; color: var(--text-dim); }
+  .issue-state { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .issue-state.open { background: var(--green); }
+  .issue-state.closed { background: var(--purple); }
+
+  /* PR Cards */
+  .pr-card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s; }
+  .pr-card:hover { border-color: var(--text-dim); }
+  .pr-card-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .pr-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .pr-status.open { background: var(--green-bg); color: var(--green); }
+  .pr-status.merged { background: var(--purple-bg); color: var(--purple); }
+  .pr-status.closed { background: var(--red-bg); color: var(--red); }
+  .pr-status.draft { background: var(--yellow-bg); color: var(--yellow); }
+  .pr-review { font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; }
+  .pr-review.approved { background: var(--green-bg); color: var(--green); }
+  .pr-review.changes { background: var(--red-bg); color: var(--red); }
+  .pr-review.pending { background: var(--yellow-bg); color: var(--yellow); }
+
+  /* Links */
+  .issue-link { font-size: 11px; color: var(--blue); text-decoration: none; }
+  .issue-link:hover { text-decoration: underline; }
+
+  /* Empty */
+  .empty { text-align: center; padding: 32px; color: var(--text-dim); font-size: 13px; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 60px; color: var(--text-muted); }
+  .loading::after { content: ''; display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--cyan); border-radius: 50%; animation: spin 0.6s linear infinite; margin-left: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error */
+  .error { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+
+  /* Section Title */
+  .section-title { font-size: 14px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>&#9678;</span> SpecFlow</h1>
+  <div class="config">
+    <input id="repo" type="text" placeholder="owner/repo" />
+    <input id="token" type="password" placeholder="GitHub Token (optional)" />
+    <button id="loadBtn" onclick="loadDashboard()">Load</button>
+  </div>
+  <div class="auto-refresh">
+    <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+    <label for="autoRefresh">Auto 30s</label>
+  </div>
+  <div class="last-update" id="lastUpdate"></div>
+</div>
+
+<div class="container" id="app">
+  <div class="empty" style="padding:100px">
+    <p style="font-size:40px;margin-bottom:16px">&#9678;</p>
+    <p style="font-size:16px;color:var(--text)">SpecFlow Dashboard</p>
+    <p style="margin-top:8px">Enter <code style="background:var(--surface);padding:2px 6px;border-radius:4px">owner/repo</code> above to view project status</p>
+  </div>
+</div>
+
+<script>
+let refreshTimer = null;
+let repoName = '';
+let apiHeaders = {};
+
+function toggleAutoRefresh() {
+  if (document.getElementById('autoRefresh').checked) {
+    refreshTimer = setInterval(loadDashboard, 30000);
+  } else {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+async function api(path) {
+  const res = await fetch(`https://api.github.com/${path}`, { headers: apiHeaders });
+  if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function apiAll(path) {
+  let results = [], page = 1;
+  while (true) {
+    const sep = path.includes('?') ? '&' : '?';
+    const data = await api(`${path}${sep}per_page=100&page=${page}`);
+    results = results.concat(data);
+    if (data.length < 100) break;
+    page++;
+  }
+  return results;
+}
+
+async function loadDashboard() {
+  const repo = document.getElementById('repo').value.trim();
+  const token = document.getElementById('token').value.trim();
+  if (!repo) return;
+  repoName = repo;
+  apiHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const btn = document.getElementById('loadBtn');
+  btn.disabled = true; btn.textContent = 'Loading...';
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Loading project data</div>';
+
+  try {
+    const [issues, prs, milestones] = await Promise.all([
+      apiAll(`repos/${repo}/issues?state=all`),
+      apiAll(`repos/${repo}/pulls?state=all`),
+      api(`repos/${repo}/milestones?state=all&sort=title&direction=asc`),
+    ]);
+
+    const allIssues = issues.filter(i => !i.pull_request);
+    const epic = allIssues.find(i => i.labels.some(l => l.name === 'epic'));
+    const sprints = allIssues.filter(i => i.labels.some(l => l.name === 'sprint'));
+    const features = allIssues.filter(i => i.labels.some(l => l.name === 'feature'));
+    const bugs = allIssues.filter(i => i.labels.some(l => l.name === 'bug'));
+    const qas = allIssues.filter(i => i.labels.some(l => l.name === 'qa'));
+
+    const openFeatures = features.filter(i => i.state === 'open');
+    const closedFeatures = features.filter(i => i.state === 'closed');
+    const openBugs = bugs.filter(i => i.state === 'open');
+    const closedBugs = bugs.filter(i => i.state === 'closed');
+    const openPRs = prs.filter(p => p.state === 'open');
+    const mergedPRs = prs.filter(p => p.merged_at);
+
+    app.innerHTML = `
+      ${renderStats(features, bugs, qas, prs, mergedPRs)}
+      <div class="section-title">Sprint Progress</div>
+      ${renderSprints(milestones, allIssues)}
+      <div class="section-title">Pipeline</div>
+      ${renderPipeline(features, bugs, qas, prs)}
+      <div class="section-title">Pull Requests</div>
+      ${renderPRs(prs)}
+    `;
+
+    document.getElementById('lastUpdate').textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    app.innerHTML = `<div class="error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Load';
+  }
+}
+
+function renderStats(features, bugs, qas, prs, mergedPRs) {
+  const closedF = features.filter(i => i.state === 'closed').length;
+  const closedB = bugs.filter(i => i.state === 'closed').length;
+  const closedQ = qas.filter(i => i.state === 'closed').length;
+  return `<div class="stats">
+    <div class="stat"><div class="stat-value" style="color:var(--blue)">${closedF}/${features.length}</div><div class="stat-label">Features Done</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--red)">${bugs.length - closedB}</div><div class="stat-label">Open Bugs</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--purple)">${closedQ}/${qas.length}</div><div class="stat-label">QA Done</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--green)">${mergedPRs.length}</div><div class="stat-label">PRs Merged</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--yellow)">${prs.filter(p=>p.state==='open').length}</div><div class="stat-label">PRs Open</div></div>
+  </div>`;
+}
+
+function renderSprints(milestones, allIssues) {
+  if (!milestones.length) return '<div class="empty">No milestones found</div>';
+  return milestones.map(m => {
+    const total = m.open_issues + m.closed_issues;
+    const pct = total ? Math.round((m.closed_issues / total) * 100) : 0;
+    const isOpen = m.state === 'open';
+    return `<div class="sprint-card">
+      <div class="sprint-header">
+        <span class="sprint-title">${esc(m.title)}</span>
+        <span class="sprint-badge ${m.state}">${isOpen ? 'Active' : 'Closed'}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill ${isOpen ? 'green' : 'blue'}" style="width:${pct}%"></div></div>
+      <div class="progress-text">${m.closed_issues}/${total} issues closed (${pct}%)</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPipeline(features, bugs, qas, prs) {
+  const open = [...features, ...bugs].filter(i => i.state === 'open' && !i.labels.some(l => l.name === 'in-progress'));
+  const inProgress = [...features, ...bugs].filter(i => i.state === 'open' && i.labels.some(l => l.name === 'in-progress'));
+  const inReview = [...features, ...bugs].filter(i => i.labels.some(l => l.name === 'ready-for-review'));
+  const inQA = [...features, ...bugs].filter(i => i.labels.some(l => l.name === 'ready-for-qa'));
+  const done = [...features, ...bugs].filter(i => i.state === 'closed');
+
+  return `<div class="pipeline">
+    ${pipelineCol('Backlog', open, 'var(--text-muted)')}
+    ${pipelineCol('In Progress', inProgress, 'var(--yellow)')}
+    ${pipelineCol('In Review', inReview, 'var(--blue)')}
+    ${pipelineCol('QA Testing', inQA, 'var(--purple)')}
+    ${pipelineCol('Done', done.slice(0, 20), 'var(--green)')}
+  </div>`;
+}
+
+function pipelineCol(title, issues, color) {
+  const cards = issues.length
+    ? issues.map(i => issueCard(i)).join('')
+    : '<div class="empty">No issues</div>';
+  return `<div class="pipeline-col">
+    <div class="pipeline-col-header" style="border-left:3px solid ${color}">
+      ${title} <span class="count">${issues.length}</span>
+    </div>
+    <div class="pipeline-col-body">${cards}</div>
+  </div>`;
+}
+
+function issueCard(issue) {
+  const labels = issue.labels.map(l => {
+    const cls = ['feature','bug','qa','spec','sprint'].find(c => l.name === c) || '';
+    return cls ? `<span class="label label-${cls}">${esc(l.name)}</span>` : '';
+  }).join('');
+  return `<div class="issue-card" onclick="window.open('${issue.html_url}','_blank')">
+    <div class="issue-card-title">
+      <span class="issue-state ${issue.state}"></span>
+      ${esc(issue.title)}
+    </div>
+    <div class="issue-card-meta">
+      <span class="issue-number">#${issue.number}</span>
+      ${labels}
+      ${issue.assignee ? `<span class="issue-number">@${esc(issue.assignee.login)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderPRs(prs) {
+  if (!prs.length) return '<div class="empty">No pull requests</div>';
+  const sorted = [...prs].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:8px">
+    ${sorted.slice(0, 20).map(pr => {
+      const merged = !!pr.merged_at;
+      const draft = pr.draft;
+      const status = merged ? 'merged' : draft ? 'draft' : pr.state;
+      const statusLabel = merged ? 'Merged' : draft ? 'Draft' : pr.state === 'open' ? 'Open' : 'Closed';
+      const reviewBadge = pr.requested_reviewers?.length
+        ? `<span class="pr-review pending">Review Pending</span>` : '';
+      const linked = pr.body?.match(/Closes #(\d+)/i);
+      const linkedIssue = linked ? `<span class="issue-number">Closes #${linked[1]}</span>` : '';
+      return `<div class="pr-card" onclick="window.open('${pr.html_url}','_blank')">
+        <div class="pr-card-title">${esc(pr.title)}</div>
+        <div class="issue-card-meta">
+          <span class="issue-number">#${pr.number}</span>
+          <span class="pr-status ${status}">${statusLabel}</span>
+          ${reviewBadge}
+          ${linkedIssue}
+          <span class="issue-number">${esc(pr.head.ref)}</span>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function esc(s) {
+  const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML;
+}
+
+// Auto-load from URL params
+const params = new URLSearchParams(location.search);
+if (params.get('repo')) {
+  document.getElementById('repo').value = params.get('repo');
+  if (params.get('token')) document.getElementById('token').value = params.get('token');
+  loadDashboard();
+}
+
+// Keyboard shortcut
+document.getElementById('repo').addEventListener('keydown', e => { if (e.key === 'Enter') loadDashboard(); });
+document.getElementById('token').addEventListener('keydown', e => { if (e.key === 'Enter') loadDashboard(); });
+</script>
+</body>
+</html>
