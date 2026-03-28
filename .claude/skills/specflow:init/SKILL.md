@@ -1,5 +1,5 @@
 ---
-name: init
+name: specflow:init
 description: 初始化 GitHub repo 的 issue labels、project 設定。在開始使用 specflow 工作流前執行一次。觸發關鍵字："init", "初始化", "setup"。
 user-invocable: true
 allowed-tools: Bash, Read

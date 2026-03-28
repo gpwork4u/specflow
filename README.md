@@ -41,10 +41,10 @@ curl -sL https://github.com/gpwork4u/specflow/archive/refs/heads/main.tar.gz \
 claude
 
 # 首次使用：初始化 GitHub labels 和 issue templates
-/init
+/specflow:init
 
 # 開始！
-/start 我的專案名稱
+/specflow:start 我的專案名稱
 ```
 
 ## 前置需求
@@ -67,7 +67,7 @@ agent-browser install
 ```
 使用者操作              背景自動執行
 ──────────            ─────────────
-/start 對話 ──→ spec-writer（前景互動）
+/specflow:start 對話 ──→ spec-writer（前景互動）
   │                       │  產出：specs/ + Epic + Sprint issues
   │ 確認 spec            ▼
   │                 tech-lead（背景）
@@ -88,14 +88,14 @@ agent-browser install
   │              ┌─ FAIL → bug issue → 修復 → 重驗 ──────────┘
   │              └─ PASS → 通知使用者
   │
-/release ──→ 歸檔 specs → 關閉 milestone → 自動推進下一個 sprint
+/specflow:release ──→ 歸檔 specs → 關閉 milestone → 自動推進下一個 sprint
 ```
 
 ### Phase 詳細說明
 
 | Phase | 做什麼 | 誰執行 | 使用者參與 |
 |-------|--------|--------|-----------|
-| 1. 初始化 | 建立 GitHub labels、issue templates | 自動 | 首次執行 `/init` |
+| 1. 初始化 | 建立 GitHub labels、issue templates | 自動 | 首次執行 `/specflow:init` |
 | 2. Spec 討論 | 討論需求、API contract、架構、sprint 規劃 | spec-writer | **對話互動** |
 | 3. 工作分配 | 分析依賴圖譜，開 feature + QA issues | tech-lead | 背景自動 |
 | 4a. 實作 | 在 `dev/` 實作 + 撰寫 unit tests | engineer ×N | 背景並行 |
@@ -351,19 +351,19 @@ Wave 2（有依賴）：
 
 | 指令 | 說明 | 使用者參與 |
 |------|------|-----------|
-| `/init` | 初始化 GitHub repo 的 labels 和 issue templates | 首次一次 |
-| `/start [主題]` | 啟動完整流程：spec 對話 → 自動到底 | 對話確認 spec |
-| `/verify` | 三維度驗證（Completeness + Correctness + Coherence）| 不需要 |
-| `/release` | 確認 sprint release，自動推進下一個 | 確認發佈 |
+| `/specflow:init` | 初始化 GitHub repo 的 labels 和 issue templates | 首次一次 |
+| `/specflow:start [主題]` | 啟動完整流程：spec 對話 → 自動到底 | 對話確認 spec |
+| `/specflow:verify` | 三維度驗證（Completeness + Correctness + Coherence）| 不需要 |
+| `/specflow:release` | 確認 sprint release，自動推進下一個 | 確認發佈 |
 
 ### 進階指令
 
 | 指令 | 說明 |
 |------|------|
-| `/spec [主題]` | 僅啟動 spec 討論 |
-| `/plan` | 僅啟動 tech-lead 開 issue |
-| `/implement [issue#]` | 僅啟動 engineer + qa 並行 |
-| `/qa` | 僅啟動 QA 撰寫 test |
+| `/specflow:spec [主題]` | 僅啟動 spec 討論 |
+| `/specflow:plan` | 僅啟動 tech-lead 開 issue |
+| `/specflow:implement [issue#]` | 僅啟動 engineer + qa 並行 |
+| `/specflow:qa` | 僅啟動 QA 撰寫 test |
 
 ---
 
@@ -418,7 +418,7 @@ your-project/
 │   │   ├── helpers.sh
 │   │   └── f{N}-{name}.sh
 │   └── screenshots/              # 測試截圖（.gitignore）
-├── .github/                      # /init 建立
+├── .github/                      # /specflow:init 建立
 │   ├── ISSUE_TEMPLATE/
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── CLAUDE.md

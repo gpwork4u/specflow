@@ -1,5 +1,5 @@
 ---
-name: implement
+name: specflow:implement
 description: 啟動實作流程。多個 engineer agent 背景並行認領 feature issues，同時 QA agent 根據 spec 撰寫 e2e test。觸發關鍵字："implement", "實作", "開發"。
 user-invocable: true
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent

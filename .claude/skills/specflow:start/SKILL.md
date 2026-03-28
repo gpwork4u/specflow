@@ -1,5 +1,5 @@
 ---
-name: start
+name: specflow:start
 description: 啟動完整的 specflow 專案流程。使用者只需與 spec agent 對話確認需求和架構，之後 tech-lead → (engineer + qa 並行) → verify → release 全部自動背景執行。觸發關鍵字："start", "開始", "啟動專案", "新專案"。
 user-invocable: true
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent
@@ -99,7 +99,7 @@ Features: X | PRs: X | E2E Tests: X passed | Bugs fixed: X
 Verify: PASS ✅
 
 驗證報告：specs/verify-sprint-{N}.md
-請使用 /release 確認發佈。
+請使用 /specflow:release 確認發佈。
 ```
 
 ## 重要

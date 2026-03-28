@@ -1,5 +1,5 @@
 ---
-name: spec
+name: specflow:spec
 description: 啟動 spec 討論流程。與使用者討論需求、規劃 sprint 階段、將功能需求以 GitHub Issue + Milestone 發佈。觸發關鍵字："spec", "規格", "需求", "新專案"。
 user-invocable: true
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent

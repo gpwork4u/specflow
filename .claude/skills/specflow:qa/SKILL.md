@@ -1,5 +1,5 @@
 ---
-name: qa
+name: specflow:qa
 description: 啟動 QA 撰寫 e2e test script。根據 spec API contract 撰寫測試程式碼，與 engineer 同時進行，不需等實作完成。觸發關鍵字："qa", "測試", "test", "e2e"。
 user-invocable: true
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent

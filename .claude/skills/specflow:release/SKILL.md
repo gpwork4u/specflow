@@ -1,5 +1,5 @@
 ---
-name: release
+name: specflow:release
 description: 確認當前 sprint release，關閉 milestone，自動推進到下一個 sprint。觸發關鍵字："release", "發佈", "上線"。
 user-invocable: true
 allowed-tools: Read, Bash, Agent

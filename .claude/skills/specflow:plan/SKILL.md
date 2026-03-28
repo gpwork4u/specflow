@@ -1,5 +1,5 @@
 ---
-name: plan
+name: specflow:plan
 description: 啟動技術規劃流程。Tech Lead 讀取當前 sprint 的 spec issues，拆分為 task issues。觸發關鍵字："plan", "規劃", "拆分", "架構"。
 user-invocable: true
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent
@@ -35,4 +35,4 @@ Tech Lead 讀取當前 sprint 的 spec issues，拆分為可執行的 task issue
 - 全程使用繁體中文
 - 只處理當前 sprint 的內容
 - 明確標示可並行的 task groups
-- 完成後提醒使用者可用 `/implement` 開始實作
+- 完成後提醒使用者可用 `/specflow:implement` 開始實作

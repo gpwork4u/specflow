@@ -1,5 +1,5 @@
 ---
-name: verify
+name: specflow:verify
 description: 對當前 sprint 進行三維度驗證：Completeness（完整性）、Correctness（正確性）、Coherence（一致性）。在 QA 通過後、release 前執行。觸發關鍵字："verify", "驗證", "檢查"。
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Bash, Agent
@@ -33,6 +33,6 @@ argument-hint: "[sprint編號]"
 
 ## 結果
 
-- **PASS** → 可以 `/release`
+- **PASS** → 可以 `/specflow:release`
 - **WARNING** → 建議修復但不阻塞
-- **FAIL** → 需修復後重新 `/verify`
+- **FAIL** → 需修復後重新 `/specflow:verify`

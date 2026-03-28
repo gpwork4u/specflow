@@ -99,10 +99,10 @@ Epic #1（索引 + 架構）
 
 | 指令 | 用途 | 使用者參與 |
 |------|------|-----------|
-| `/init` | 初始化 labels + templates | 首次一次 |
-| `/start [主題]` | 啟動完整流程 | 對話確認 spec |
-| `/verify` | 三維度驗證 sprint | 不需要 |
-| `/release` | 確認 sprint release | 確認 |
+| `/specflow:init` | 初始化 labels + templates | 首次一次 |
+| `/specflow:start [主題]` | 啟動完整流程 | 對話確認 spec |
+| `/specflow:verify` | 三維度驗證 sprint | 不需要 |
+| `/specflow:release` | 確認 sprint release | 確認 |
 
 ## 前置工具
 
