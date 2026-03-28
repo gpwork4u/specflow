@@ -60,8 +60,8 @@ project/
   │           dev/實作  test/ design/元件
   │                 └─────┬─────┘
   │                       ▼
-  │                 Sprint 完整測試
-  │                 docker compose up → unit + API + browser tests
+  │                 Sprint 完整測試（Release Gate）
+  │                 docker compose up → unit + API + browser → test report
   │                       │
   │              ┌─ 失敗 → bug issue（附截圖）→ 修復 → 重測 ─┐
   │              └─ 通過 ↓                                   │
@@ -107,6 +107,7 @@ Epic #1（索引 + 需求）
 
 ## 前置工具
 
+- [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) — 本地部署 + release 前完整測試
 - [agent-browser](https://github.com/vercel-labs/agent-browser) — `npm install -g agent-browser && agent-browser install`
 
 ## 語言

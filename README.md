@@ -51,10 +51,14 @@ claude
 
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安裝
 - [GitHub CLI (`gh`)](https://cli.github.com/) 已安裝並登入
+- [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) 已安裝（本地部署 + 測試用）
 - [agent-browser](https://github.com/vercel-labs/agent-browser) 已安裝（QA 瀏覽器測試用）
 - 目標 GitHub repo 已建立且已 `git init`
 
 ```bash
+# 確認 Docker
+docker --version && docker compose version
+
 # agent-browser 安裝
 npm install -g agent-browser
 agent-browser install

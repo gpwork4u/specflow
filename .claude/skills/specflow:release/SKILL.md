@@ -49,7 +49,16 @@ if [ "$OPEN_PRS" -gt 0 ]; then
   BLOCK=true
 fi
 
-# 5. 驗證報告必須存在且為 PASS
+# 5. Test Report 必須存在且為 ALL PASSED
+if [ ! -f "test/reports/sprint-{N}-test-report.md" ]; then
+  echo "❌ BLOCKED: Test Report 不存在（QA 尚未執行完整測試）"
+  BLOCK=true
+elif ! grep -q "ALL TESTS PASSED" "test/reports/sprint-{N}-test-report.md"; then
+  echo "❌ BLOCKED: Test Report 顯示有失敗的測試"
+  BLOCK=true
+fi
+
+# 6. 驗證報告必須存在且為 PASS
 if [ ! -f "specs/verify-sprint-{N}.md" ]; then
   echo "❌ BLOCKED: 驗證報告不存在（請先執行 /specflow:verify）"
   BLOCK=true
@@ -118,12 +127,21 @@ NEXT_SPRINT=$(gh api repos/{owner}/{repo}/milestones --jq '[.[] | select(.state=
 
 ## Release Gate 總結
 
-| 檢查項目 | 必須 | 來源 |
-|----------|------|------|
-| QA issue 已關閉 | ✅ | QA 完整測試通過後才會關閉 |
-| 所有 feature issues 已關閉 | ✅ | PR merge 自動關閉 |
-| 所有 bug issues 已關閉 | ✅ | fix PR merge 自動關閉 |
-| 所有 PR 已合併 | ✅ | engineer + qa 的 PR |
-| 驗證報告 PASS | ✅ | verifier 三維度檢查 |
+| # | 檢查項目 | 必須 | 來源 |
+|---|----------|------|------|
+| 1 | QA issue 已關閉 | ✅ | QA 完整測試通過後才會關閉 |
+| 2 | 所有 feature issues 已關閉 | ✅ | PR merge 自動關閉 |
+| 3 | 所有 bug issues 已關閉 | ✅ | fix PR merge 自動關閉 |
+| 4 | 所有 PR 已合併 | ✅ | engineer + qa + design 的 PR |
+| 5 | Test Report ALL PASSED | ✅ | `test/reports/sprint-{N}-test-report.md` |
+| 6 | 驗證報告 PASS | ✅ | verifier 三維度檢查 |
 
 **缺任何一項都不能 release。**
+
+Test Report 包含：
+- Docker Compose 環境狀態
+- Unit Tests 結果
+- API E2E Tests 結果
+- Browser Tests 結果（agent-browser）
+- Scenario 覆蓋率
+- 發現的問題清單
