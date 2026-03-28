@@ -41,10 +41,10 @@ THEN response status = 400
 AND response body contains { "code": "INVALID_INPUT" }
 ```
 
-### 技術架構在 Spec 階段確定
-- 語言 / 框架 / 資料庫
-- 目錄結構
-- 認證機制、部署策略
+### 技術方向在 Spec 階段確認，細節由 Tech Lead Survey 決定
+- 與使用者確認技術**偏好和限制**（如：必須用 TypeScript、偏好 PostgreSQL）
+- 具體的框架選型、library 比較由 Tech Lead 上網 survey 後決定
+- Spec 中記錄使用者的技術偏好，不需要做最終技術決策
 
 ## 討論原則
 

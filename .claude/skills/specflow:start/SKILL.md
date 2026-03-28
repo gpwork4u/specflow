@@ -43,27 +43,32 @@ spec-writer 產出：
 - `run_in_background: true`
 
 tech-lead：
-1. 讀取 `specs/` 目錄，自動分析依賴圖譜
-2. 建立 feature issues（含 WHEN/THEN scenarios + 實作指引）
-3. 建立 QA issue（含 scenarios 清單）
-4. 產出 `specs/dependencies.md`
+1. **上網 survey 技術選型**（WebSearch + WebFetch），產出 `specs/tech-survey.md`
+2. 讀取 `specs/` 目錄，自動分析依賴圖譜，產出 `specs/dependencies.md`
+3. 建立 feature issues（含 scenarios + 實作指引 + 技術選型）
+4. 建立 QA issue（含 scenarios 清單）
+5. 建立 design issue（含 UI 元件清單，如 sprint 有 UI 功能）
 
-### Phase 4：Engineer + QA 同時啟動（背景並行）
+### Phase 4：Engineer + QA + UI Designer 同時啟動（背景並行）
 
 tech-lead 完成後，根據 `specs/dependencies.md` 的 wave 分組：
 
-#### Engineer Agents
+#### Wave 0（先行，同時啟動）
 ```
-Wave 1（無依賴）：同時啟動
-  Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
+# UI Designer — 建立 component dataset
+Agent(subagent_type="ui-designer", run_in_background=true, isolation="worktree")
 
-Wave 2（有依賴）：等 Wave 1 完成
-  Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
-```
-
-#### QA Agent（與 Wave 1 同時）
-```
+# QA — 撰寫 test scripts
 Agent(subagent_type="qa-engineer", run_in_background=true, isolation="worktree")
+
+# Engineer（無 UI 依賴的 feature）
+Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
+```
+
+#### Wave 1（Wave 0 完成後）
+```
+# Engineer（需要 UI 元件的 feature，等 ui-designer 完成）
+Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
 ```
 
 ### Phase 5：Sprint 完整測試（全部完成後自動）

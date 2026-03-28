@@ -3,15 +3,16 @@
 ## 概述
 
 使用者只需做兩件事：
-1. **與 spec agent 對話** — 確認需求、API contract、技術架構、sprint 規劃
+1. **與 spec agent 對話** — 確認需求、技術偏好、sprint 規劃
 2. **確認 release** — 每個 sprint 完成後確認發佈
 
 ## 角色分工
 
 | 角色 | 職責 | 工作目錄 | 產出 |
 |------|------|---------|------|
-| **spec-writer** | 與使用者討論需求和架構 | `specs/` | Epic + Sprint issues |
-| **tech-lead** | 讀取 spec，分析依賴，開 issue | `specs/` | Feature + QA issues |
+| **spec-writer** | 與使用者討論需求 | `specs/` | Epic + Sprint issues |
+| **tech-lead** | 技術 survey + 開 issue 分配工作 | `specs/` | tech-survey.md + Feature/QA/Design issues |
+| **ui-designer** | 建立可重用 UI component dataset | `design/` | Design tokens + 元件規格 + 範例 |
 | **engineer** | 認領 feature / bug，寫程式 + unit test | `dev/` | PR（Closes #issue） |
 | **qa-engineer** | 認領 QA issue，寫 e2e + browser test | `test/` | Test PR + Bug issues（附截圖） |
 | **verifier** | 三維度驗證 sprint 交付品質 | `specs/` | 驗證報告 |
@@ -20,6 +21,11 @@
 
 ```
 project/
+├── design/           ← 🎨 UI Designer 專屬（tokens + 元件規格）
+│   ├── tokens/
+│   ├── components/
+│   ├── pages/
+│   └── assets/
 ├── dev/              ← 🔧 Engineer 專屬（程式碼 + unit tests）
 │   ├── src/
 │   └── __tests__/
@@ -27,64 +33,56 @@ project/
 │   ├── e2e/
 │   ├── browser/
 │   └── screenshots/
-├── specs/            ← 📖 Spec（spec-writer + tech-lead 管理）
+├── specs/            ← 📖 Spec + Tech Survey
 │   ├── overview.md
+│   ├── tech-survey.md
 │   ├── features/
 │   ├── dependencies.md
 │   └── changes/
 ```
 
-**Engineer 不碰 `test/`，QA 不碰 `dev/`。**
+**各角色只動自己的目錄。**
 
 ## 流程
 
 ```
 使用者操作              背景自動執行
 ──────────            ─────────────
-/start 對話 ──→ spec-writer（前景互動）
+/specflow:start ──→ spec-writer（前景互動，選擇題提問）
   │                       │  產出：specs/ + Epic + Sprint issues
   │ 確認 spec            ▼
   │                 tech-lead（背景）
-  │                       │  分析依賴 → 開 Feature + QA issues
-  │                 ┌─────┴─────┐
-  │                 ▼           ▼
-  │           engineer ×N    qa-engineer        ← 同時啟動
-  │           dev/ 實作      test/ 撰寫 e2e + browser test
-  │           + unit test
-  │           各自發 PR      發 test PR
+  │                       │  上網 survey → tech-survey.md
+  │                       │  開 Feature + QA + Design issues
+  │                 ┌─────┼─────┐
+  │                 ▼     ▼     ▼
+  │           engineer  qa    ui-designer   ← 同時啟動
+  │           dev/實作  test/ design/元件
   │                 └─────┬─────┘
   │                       ▼
   │                 Sprint 完整測試
   │                 docker compose up → unit + API + browser tests
   │                       │
-  │              ┌─ 失敗 → bug issue（附截圖）→ engineer 修復 → 重測 ─┐
-  │              └─ 通過 ↓                                          │
-  │                 verifier（三維度驗證）                            │
-  │                       │                                         │
-  │              ┌─ FAIL → bug issue → 修復 → 重驗 ─────────────────┘
+  │              ┌─ 失敗 → bug issue（附截圖）→ 修復 → 重測 ─┐
+  │              └─ 通過 ↓                                   │
+  │                 verifier（三維度驗證）                     │
+  │                       │                                  │
+  │              ┌─ FAIL → 修復 → 重驗 ──────────────────────┘
   │              └─ PASS → 通知使用者
   │
-/release ──→ Release Gate（QA 通過 + verify PASS 才放行）
-         ──→ 關閉 milestone → 自動推進下一個 sprint
+/specflow:release ──→ Release Gate → 關閉 milestone → 下一個 sprint
 ```
-
-## 測試分工
-
-| 測試類型 | 負責角色 | 目錄 | 工具 |
-|----------|---------|------|------|
-| Unit Tests | Engineer | `dev/__tests__/` | test framework |
-| API E2E Tests | QA | `test/e2e/` | test framework |
-| Browser E2E Tests | QA | `test/browser/` | agent-browser |
 
 ## GitHub Issue 架構
 
 ```
-Epic #1（索引 + 架構）
+Epic #1（索引 + 需求）
 ├── Sprint 1 #2
-│   ├── Feature F-001 #3（engineer，含 scenarios）
-│   ├── Feature F-002 #4（engineer，含 scenarios）
-│   ├── QA Sprint 1 #5（qa，含 scenario 清單）
-│   └── Bug #8（如有，附截圖，engineer）
+│   ├── Feature F-001 #3（engineer）
+│   ├── Feature F-002 #4（engineer）
+│   ├── Design Sprint 1 #5（ui-designer）
+│   ├── QA Sprint 1 #6（qa-engineer）
+│   └── Bug #9（如有，附截圖）
 ```
 
 ### Labels
@@ -94,7 +92,8 @@ Epic #1（索引 + 架構）
 | `epic` | Epic 總覽 |
 | `sprint` | Sprint 追蹤 |
 | `feature` | 功能需求（engineer） |
-| `qa` | QA 測試（qa） |
+| `design` | UI 設計（ui-designer） |
+| `qa` | QA 測試（qa-engineer） |
 | `bug` | Bug（engineer） |
 
 ## 指令

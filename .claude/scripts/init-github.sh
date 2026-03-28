@@ -28,6 +28,7 @@ declare -A LABELS=(
   ["epic"]="3E4B9E|Epic 總覽"
   ["sprint"]="C5DEF5|Sprint 追蹤"
   ["feature"]="1D76DB|功能需求"
+  ["design"]="F9D0C4|UI 設計"
   ["qa"]="D876E3|測試相關"
   ["bug"]="B60205|Bug 缺陷"
   # 狀態
