@@ -1,6 +1,6 @@
 # SpecFlow
 
-基於 Claude Code 的自動化專案交付工作流。透過多個 AI agent 協作，將「需求討論 → 技術規劃 → 實作 → 測試」的完整流程自動化。
+基於 Claude Code 的自動化專案交付工作流。透過多個 AI agent 協作，將「需求討論 → 技術規劃 → 實作 → 測試 → 驗證」的完整流程自動化。
 
 使用者只需要做兩件事：
 
@@ -42,24 +42,27 @@ claude
 使用者操作              背景自動執行
 ──────────            ─────────────
 /start 對話 ──→ spec-writer（前景互動）
-  │                       │  建立：Epic + Sprint issues
+  │                       │  產出：specs/ + Epic + Sprint issues
   │ 確認 spec            ▼
   │                 tech-lead（背景）
-  │                       │  建立：Feature issues + QA issue
+  │                       │  分析依賴 → 開 Feature + QA issues
   │                 ┌─────┴─────┐
   │                 ▼           ▼
   │           engineer ×N    qa-engineer        ← 同時啟動
-  │           認領 feature   認領 QA issue
-  │           各自發 PR      撰寫 e2e test + 發 PR
+  │           認領 feature   WHEN/THEN → test script
+  │           各自發 PR      發 test PR
   │                 └─────┬─────┘
   │                       ▼
   │                 執行 e2e tests
   │                       │
   │              ┌─ 失敗 → bug issue → engineer 修復 → 重測 ─┐
-  │              └─ 通過 → 通知使用者                         │
-  │                       ▲                                  │
-  │                       └──────────────────────────────────┘
-/release ──→ 關閉 milestone → 自動推進下一個 sprint
+  │              └─ 通過 ↓                                   │
+  │                 verifier（三維度驗證）                     │
+  │                       │                                  │
+  │              ┌─ FAIL → bug issue → 修復 → 重驗 ──────────┘
+  │              └─ PASS → 通知使用者
+  │
+/release ──→ 歸檔 specs → 關閉 milestone → 自動推進下一個 sprint
 ```
 
 ### Phase 詳細說明
@@ -67,13 +70,13 @@ claude
 | Phase | 做什麼 | 誰執行 | 使用者參與 |
 |-------|--------|--------|-----------|
 | 1. 初始化 | 建立 GitHub labels、issue templates | 自動 | 首次執行 `/init` |
-| 2. Spec 討論 | 討論需求、API contract、技術架構、sprint 規劃 | spec-writer | **對話互動** |
-| 3. 工作分配 | 讀取 spec，開 feature issue 給 engineer、QA issue 給 qa | tech-lead | 背景自動 |
-| 4a. 實作 | 認領 feature issue，獨立分支開發，發 PR（`Closes #issue`） | engineer ×N | 背景並行 |
-| 4b. 測試撰寫 | 根據 API contract 撰寫 e2e test script，發 PR | qa-engineer | 背景同步 |
-| 5. 測試驗證 | 執行 e2e tests，通過則完成，失敗建 bug issue | qa-engineer | 背景自動 |
-| 5.5 Bug 修復 | 認領 bug issue，修復，發 PR，QA 重新驗證 | engineer | 背景自動 |
-| 6. Release | 確認 sprint 交付，關閉 milestone，推進下一 sprint | 自動 | **確認 release** |
+| 2. Spec 討論 | 討論需求、API contract、架構、sprint 規劃 | spec-writer | **對話互動** |
+| 3. 工作分配 | 分析依賴圖譜，開 feature + QA issues | tech-lead | 背景自動 |
+| 4a. 實作 | 認領 feature issue，獨立 worktree 開發，發 PR | engineer ×N | 背景並行 |
+| 4b. 測試撰寫 | 將 WHEN/THEN scenarios 轉為 e2e test script | qa-engineer | 背景同步 |
+| 5. 測試驗證 | 執行 e2e tests，失敗建 bug issue | qa-engineer | 背景自動 |
+| 5.5 三維度驗證 | Completeness + Correctness + Coherence | verifier | 背景自動 |
+| 6. Release | 確認 sprint 交付，推進下一 sprint | 自動 | **確認 release** |
 
 ---
 
@@ -81,39 +84,120 @@ claude
 
 ### spec-writer — 產品規格專家
 
-與使用者互動討論需求，產出的 spec 包含：
-- 技術架構（語言、框架、資料庫、部署）
-- 每個功能的完整 API contract（endpoint、request/response schema、error codes）
-- Data model 定義
-- 接受標準與測試場景（讓 QA 可同步寫測試）
+與使用者互動討論需求，產出：
+- `specs/` 目錄（source of truth）
+- Epic Issue + Sprint Issues
+- Sprint Milestones
 
-**建立的 Issue**：Epic（含完整規格）、Sprint（追蹤進度）
+Spec 涵蓋：技術架構、API contract、data model、business rules、**WHEN/THEN scenarios**。
 
 ### tech-lead — 技術主管
 
-讀取 spec，分析依賴關係，為 engineer 和 QA 開出工作 issue：
-- Feature issue — 含 API contract + 實作指引（要建立/修改的檔案、關鍵邏輯）
-- QA issue — 含測試範圍 + test case 清單
+讀取 `specs/` 目錄，自動化分析：
+- **依賴圖譜**：用拓撲排序自動決定 feature 的執行順序（wave-based）
+- Feature issue — 含 scenarios + 實作指引（建立/修改的檔案、關鍵邏輯）
+- QA issue — 含所有 scenarios 清單
 
 **建立的 Issue**：Feature（給 engineer）、QA（給 qa-engineer）
 
 ### engineer — 軟體工程師
 
-認領 feature 或 bug issue，在獨立分支上實作，完成後發 PR 連結 issue。多個 engineer agent 可背景並行處理不同 feature。
-
-**每個 engineer 獨立運作**：
-- 獨立 git worktree（避免衝突）
-- 獨立分支（`feature/{issue}-xxx` 或 `fix/{issue}-xxx`）
-- PR 使用 `Closes #{issue}` 自動關閉對應 issue
+認領 feature 或 bug issue，在獨立 worktree 分支上實作，發 PR 連結 issue。實作需滿足 spec 中所有 WHEN/THEN scenarios。
 
 ### qa-engineer — QA 工程師
 
-認領 QA issue，根據 feature issue 的 API contract 撰寫 e2e test script **程式碼**（不是文件）。與 engineer 同時啟動，不需要等實作完成。
+認領 QA issue，將 WHEN/THEN scenarios **直接轉為 e2e test script 程式碼**。與 engineer 同時啟動，不需等實作完成。
 
-**工作流程**：
-1. 根據 spec 撰寫 test script → 發 PR
-2. Engineer 完成後執行測試
-3. 失敗 → 建 bug issue → engineer 修復 → 重測
+**轉換規則**：
+| Scenario | Test Code |
+|----------|-----------|
+| GIVEN | test setup / beforeEach |
+| WHEN | API call / action |
+| THEN | expect assertion |
+| AND | additional expect |
+
+### verifier — 驗證專家
+
+在 QA 測試通過後，對整個 sprint 進行三維度驗證：
+
+| 維度 | 檢查什麼 | 嚴重等級 |
+|------|---------|---------|
+| **Completeness** | 所有 spec 有實作？所有 scenario 有 test？ | CRITICAL |
+| **Correctness** | API/error codes 符合 spec？business rules 實作？ | CRITICAL |
+| **Coherence** | 目錄結構、命名、error handling 一致？ | WARNING |
+
+---
+
+## Specification-Driven Development
+
+### Source of Truth：`specs/` 目錄
+
+所有規格以 Markdown 檔案維護在 repo 中，是整個工作流的 single source of truth：
+
+```
+specs/
+├── overview.md                  # 專案概述 + 技術架構
+├── dependencies.md              # 依賴圖譜（tech-lead 自動產生）
+├── verify-sprint-{N}.md         # 驗證報告（verifier 產生）
+├── features/
+│   ├── f001-{name}.md           # Feature spec（含 WHEN/THEN scenarios）
+│   ├── f002-{name}.md
+│   └── ...
+└── changes/                     # Delta 變更（跨 sprint 修改既有功能）
+    ├── sprint-2-changes.md
+    └── archive/                 # 已歸檔的變更
+```
+
+### WHEN/THEN Scenario 格式
+
+每個接受標準以 scenario 形式撰寫，可直接轉為 test case：
+
+```markdown
+#### Scenario: 建立 resource 成功
+GIVEN 使用者已登入且有有效 token
+WHEN POST /api/v1/resource with { "field_a": "test", "field_b": 42 }
+THEN response status = 201
+AND response body matches { "id": any(string), "field_a": "test" }
+AND database contains record with field_a = "test"
+```
+
+QA 直接轉為：
+
+```typescript
+test('Scenario: 建立 resource 成功', async () => {
+  // GIVEN
+  const token = await getAuthToken();
+  // WHEN
+  const res = await api.post('/api/v1/resource', {
+    body: { field_a: 'test', field_b: 42 },
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  // THEN
+  expect(res.status).toBe(201);
+  // AND
+  expect(res.body).toMatchObject({ id: expect.any(String), field_a: 'test' });
+});
+```
+
+### Delta 變更格式
+
+跨 sprint 修改既有功能時，使用 delta 格式記錄變更意圖：
+
+```markdown
+# Sprint 2 Changes
+
+## MODIFIED: F-001 Resource 管理
+- ADDED endpoint: `PATCH /api/v1/resource/:id`
+- MODIFIED `POST`: added optional field `field_c`
+
+## ADDED: F-005 Notification
+（完整新功能 spec）
+
+## REMOVED: F-003 Legacy Export
+Migration: 使用 F-004 Batch Export 替代
+```
+
+確認後更新主檔案，變更歸檔到 `specs/changes/archive/`。
 
 ---
 
@@ -121,30 +205,18 @@ claude
 
 ### 層級關係
 
-透過 issue body 中的 task list（`- [ ] #issue`）串連層級：
+透過 issue body 中的 task list（`- [ ] #issue`）串連：
 
 ```
-Epic #1（spec + 架構 + 所有功能規格）
-├── Sprint 1 #2（sprint 追蹤）
-│   ├── Feature F-001 #3（engineer 認領）
-│   ├── Feature F-002 #4（engineer 認領）
-│   ├── QA Sprint 1 #5（qa-engineer 認領）
-│   └── Bug #8（如有，engineer 認領）
+Epic #1（索引 + 架構）
+├── Sprint 1 #2
+│   ├── Feature F-001 #3（engineer，含 scenarios）
+│   ├── Feature F-002 #4（engineer，含 scenarios）
+│   ├── QA Sprint 1 #5（qa，含 scenario 清單）
+│   └── Bug #8（如有，engineer）
 ├── Sprint 2 #6
-│   ├── Feature F-003 #7
-│   ├── QA Sprint 2 #9
 │   └── ...
 ```
-
-### Issue 類型
-
-| 類型 | 標題格式 | Label | 建立者 | 執行者 |
-|------|---------|-------|--------|--------|
-| Epic | `📋 [Spec] 專案 - 總覽` | `spec`, `epic` | spec-writer | — |
-| Sprint | `🏃 [Sprint N] 目標` | `sprint` | spec-writer | — |
-| Feature | `📝 [Feature] F-XXX: 名稱` | `feature` | tech-lead | engineer |
-| QA | `🧪 [QA] Sprint N E2E Test` | `qa` | tech-lead | qa-engineer |
-| Bug | `🐛 [Bug] 描述` | `bug` | qa-engineer | engineer |
 
 ### Labels
 
@@ -161,9 +233,46 @@ Epic #1（spec + 架構 + 所有功能規格）
 | `ready-for-review` | #7057FF 紫 | 等待 Review |
 | `ready-for-qa` | #D876E3 紫 | 等待 QA 驗證 |
 
-### Milestones
+---
 
-每個 Sprint 對應一個 GitHub Milestone。所有 agent 只處理當前 sprint milestone 下的 issues。
+## 並行執行策略
+
+多個 engineer 和 qa-engineer 同時對**同一個 repo** 進行開發，透過 **git worktree** 隔離彼此的工作區。
+
+### Git Worktree 機制
+
+```
+your-project/                          ← 主 worktree（main branch）
+│
+/tmp/.claude-worktrees/
+├── specflow-feature-3-user-auth/      ← Engineer A（branch: feature/3-user-auth）
+├── specflow-feature-4-crud-api/       ← Engineer B（branch: feature/4-crud-api）
+└── specflow-test-sprint-1-e2e/        ← QA（branch: test/sprint-1-e2e）
+```
+
+每個 agent 啟動時，Claude Code 自動建立獨立 worktree，完成後 push branch、發 PR，worktree 自動清理。
+
+### 自動化依賴分析
+
+Tech Lead 自動分析 feature 間的依賴（data model 引用、API 依賴），產出拓撲排序：
+
+```
+Wave 1（無依賴，同時啟動）：
+┌──────────────────────────────────────────────┐
+│  Engineer A     Engineer B     QA Engineer   │
+│  Feature #3     Feature #4     QA Issue #5   │
+└──────────────────────────────────────────────┘
+                     │
+                全部完成後
+                     │
+Wave 2（有依賴）：
+┌──────────────────────────────────────────────┐
+│  Engineer C                                  │
+│  Feature #7（依賴 #3 的 data model）          │
+└──────────────────────────────────────────────┘
+```
+
+依賴圖譜存放在 `specs/dependencies.md`。
 
 ---
 
@@ -173,143 +282,19 @@ Epic #1（spec + 架構 + 所有功能規格）
 
 | 指令 | 說明 | 使用者參與 |
 |------|------|-----------|
-| `/init` | 初始化 GitHub repo 的 labels 和 issue templates | 首次執行一次 |
+| `/init` | 初始化 GitHub repo 的 labels 和 issue templates | 首次一次 |
 | `/start [主題]` | 啟動完整流程：spec 對話 → 自動到底 | 對話確認 spec |
-| `/release` | 確認當前 sprint release，自動推進下一個 | 確認發佈 |
+| `/verify` | 三維度驗證（Completeness + Correctness + Coherence）| 不需要 |
+| `/release` | 確認 sprint release，自動推進下一個 | 確認發佈 |
 
-### 進階指令（個別階段控制）
+### 進階指令
 
 | 指令 | 說明 |
 |------|------|
 | `/spec [主題]` | 僅啟動 spec 討論 |
 | `/plan` | 僅啟動 tech-lead 開 issue |
-| `/implement [issue#]` | 僅啟動 engineer + qa 並行實作 |
+| `/implement [issue#]` | 僅啟動 engineer + qa 並行 |
 | `/qa` | 僅啟動 QA 撰寫 test |
-
-一般情況下只需要 `/start` 和 `/release`，進階指令用於需要單獨控制某個階段時。
-
----
-
-## 通訊機制
-
-所有 agent 之間的溝通**完全透過 GitHub Issues 和 PR**：
-
-```
-spec-writer ──建立──→ Epic issue（完整規格）
-                          │
-tech-lead ───讀取────────┘
-     │
-     ├──建立──→ Feature issue ──→ engineer 認領 ──→ PR（Closes #feature）
-     │
-     └──建立──→ QA issue ──→ qa-engineer 認領 ──→ test PR
-                                                      │
-                                                  執行測試
-                                                      │
-                                              失敗 → Bug issue ──→ engineer 認領 ──→ fix PR（Closes #bug）
-```
-
-### 為什麼用 GitHub Issues？
-
-- **可追溯**：每個 PR 連結回 issue，issue 連結回 spec
-- **可見性**：所有工作進度在 GitHub 上一目了然
-- **解耦**：agent 之間不直接通訊，透過 issue 非同步協作
-- **人類可介入**：任何時候使用者都可以直接在 issue 上留言、修改、關閉
-
----
-
-## 並行執行策略
-
-多個 engineer 和 qa-engineer 同時對**同一個 repo** 進行開發，透過 **git worktree** 隔離彼此的工作區，避免開發打架。
-
-### Git Worktree 機制
-
-```
-your-project/                          ← 主 worktree（main branch）
-│
-├── .git/worktrees/
-│   ├── agent-engineer-1/              ← Engineer A 的 worktree
-│   ├── agent-engineer-2/              ← Engineer B 的 worktree
-│   └── agent-qa/                      ← QA 的 worktree
-│
-/tmp/.claude-worktrees/
-├── specflow-feature-3-user-auth/      ← Engineer A 工作目錄（branch: feature/3-user-auth）
-├── specflow-feature-4-crud-api/       ← Engineer B 工作目錄（branch: feature/4-crud-api）
-└── specflow-test-sprint-1-e2e/        ← QA 工作目錄（branch: test/sprint-1-e2e）
-```
-
-每個 agent 啟動時，Claude Code 自動：
-1. 從主 repo 建立一個 **git worktree**（獨立的工作目錄 + 獨立的 branch）
-2. Agent 在自己的 worktree 中自由讀寫檔案、執行指令
-3. 完成後 push branch、發 PR
-4. Worktree 自動清理（如果沒有未提交的變更）
-
-### 為什麼用 Worktree 而不是 Clone？
-
-| | Worktree | Clone |
-|---|----------|-------|
-| **磁碟空間** | 共用 `.git` objects，幾乎不佔額外空間 | 完整複製一份 repo |
-| **同步** | 同一個 repo，branch/remote 自動共享 | 需要手動同步 |
-| **衝突** | 各自獨立 branch，push 時才需要解決 | 同上 |
-| **清理** | 自動回收 | 需要手動刪除 |
-
-### Wave-Based 並行調度
-
-Tech Lead 分析 feature 間的依賴關係後，orchestrator 分批啟動 agent：
-
-```
-Wave 1（無依賴）：
-┌─────────────────────────────────────────────────────┐
-│  Engineer A        Engineer B        QA Engineer    │
-│  worktree: /tmp/a  worktree: /tmp/b  worktree: /tmp/q │
-│  branch: feature/3 branch: feature/4 branch: test/1│
-│  issue: #3         issue: #4         issue: #5     │
-│                                                     │
-│  ──── 同時背景執行，互不干擾 ────                     │
-└─────────────────────────────────────────────────────┘
-                         │
-                    全部完成後
-                         │
-Wave 2（有依賴）：
-┌─────────────────────────────────────────────────────┐
-│  Engineer C                                         │
-│  worktree: /tmp/c                                   │
-│  branch: feature/7                                  │
-│  issue: #7（依賴 #3 的 data model）                   │
-└─────────────────────────────────────────────────────┘
-                         │
-                    全部完成後
-                         │
-                  QA 執行 e2e tests
-```
-
-### Agent 定義中的 Worktree 設定
-
-在 `.claude/agents/*.md` 的 frontmatter 中：
-
-```yaml
-# engineer.md / qa-engineer.md
-isolation: worktree   # 每次啟動自動建立獨立 worktree
-```
-
-Orchestrator 啟動 agent 時的呼叫方式：
-
-```
-# 每個 engineer 一個獨立的背景 worktree agent
-Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
-Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
-
-# QA 也是獨立 worktree，與 engineer 同時啟動
-Agent(subagent_type="qa-engineer", run_in_background=true, isolation="worktree")
-```
-
-### 衝突處理
-
-因為每個 agent 都在自己的 branch 上開發，正常情況下不會衝突。可能的例外：
-
-- **多個 feature 修改同一個檔案**（如 `routes/index.ts` 註冊新 route）→ PR merge 時 GitHub 會標示衝突，需要人工或後續 agent 處理
-- **QA 和 engineer 都修改 `package.json`**（如新增 test dependency）→ 同上
-
-Tech Lead 在分析依賴時會盡量避免這類情況，將可能衝突的 feature 安排在不同 wave。
 
 ---
 
@@ -318,29 +303,49 @@ Tech Lead 在分析依賴時會盡量避免這類情況，將可能衝突的 fea
 ```
 your-project/
 ├── .claude/
-│   ├── agents/                  # Agent 定義
+│   ├── agents/
 │   │   ├── spec-writer.md       # 產品規格專家
 │   │   ├── tech-lead.md         # 技術主管
 │   │   ├── engineer.md          # 軟體工程師
-│   │   └── qa-engineer.md       # QA 工程師
-│   ├── skills/                  # Skill 定義（使用者可呼叫的指令）
-│   │   ├── init/SKILL.md        # /init
-│   │   ├── start/SKILL.md       # /start
-│   │   ├── release/SKILL.md     # /release
-│   │   ├── spec/SKILL.md        # /spec
-│   │   ├── plan/SKILL.md        # /plan
-│   │   ├── implement/SKILL.md   # /implement
-│   │   └── qa/SKILL.md          # /qa
+│   │   ├── qa-engineer.md       # QA 工程師
+│   │   └── verifier.md          # 驗證專家
+│   ├── skills/
+│   │   ├── init/SKILL.md
+│   │   ├── start/SKILL.md       # 主要 orchestrator
+│   │   ├── release/SKILL.md
+│   │   ├── verify/SKILL.md
+│   │   ├── spec/SKILL.md
+│   │   ├── plan/SKILL.md
+│   │   ├── implement/SKILL.md
+│   │   └── qa/SKILL.md
 │   └── scripts/
-│       └── init-github.sh       # GitHub 初始化腳本
-├── .github/                     # （/init 建立）
+│       └── init-github.sh
+├── specs/                        # Source of Truth（spec-writer 產生）
+│   ├── overview.md
+│   ├── dependencies.md           # tech-lead 自動產生
+│   ├── verify-sprint-{N}.md      # verifier 產生
+│   ├── features/
+│   │   └── f{N}-{name}.md
+│   └── changes/
+│       └── archive/
+├── .github/                      # /init 建立
 │   ├── ISSUE_TEMPLATE/
-│   │   ├── feature.yml
-│   │   └── bug.yml
 │   └── PULL_REQUEST_TEMPLATE.md
-├── CLAUDE.md                    # 專案指令（Claude Code 自動讀取）
+├── CLAUDE.md
 └── README.md
 ```
+
+---
+
+## 設計靈感
+
+本專案的部分設計受到 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 啟發：
+
+- **WHEN/THEN Scenario 格式** — 將接受標準結構化為可直接轉為 test 的 scenarios
+- **Delta 變更格式** — ADDED/MODIFIED/REMOVED 追蹤跨 sprint 的功能修改
+- **三維度驗證** — Completeness、Correctness、Coherence 確保交付品質
+- **本地 Spec 檔案** — repo 中的 `specs/` 目錄作為 source of truth
+- **依賴圖譜** — 拓撲排序自動計算並行策略
 
 ---
 
@@ -348,19 +353,19 @@ your-project/
 
 ### 調整 Agent 行為
 
-編輯 `.claude/agents/*.md` 中的 prompt 內容：
-- 修改 `model` 欄位切換模型（opus / sonnet / haiku）
-- 修改 `maxTurns` 調整 agent 最大執行輪數
-- 修改 `tools` 限制可用工具
-- 修改 prompt 中的模板格式調整 issue / PR 的內容結構
+編輯 `.claude/agents/*.md`：
+- `model` — 切換模型（opus / sonnet / haiku）
+- `maxTurns` — 調整最大執行輪數
+- `tools` — 限制可用工具
+- prompt 內容 — 調整 issue / PR 的格式
 
 ### 調整 Labels
 
-編輯 `.claude/scripts/init-github.sh` 中的 `LABELS` 陣列，新增或修改 label。
+編輯 `.claude/scripts/init-github.sh` 中的 `LABELS` 陣列。
 
 ### 新增 Skill
 
-在 `.claude/skills/{skill-name}/SKILL.md` 建立新的 skill 檔案，即可用 `/{skill-name}` 呼叫。
+在 `.claude/skills/{name}/SKILL.md` 建立新檔案，即可用 `/{name}` 呼叫。
 
 ---
 
