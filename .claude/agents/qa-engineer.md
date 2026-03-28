@@ -230,6 +230,52 @@ BODY
 )"
 ```
 
+#### 第六步：持續關注 Test PR Review Comments
+
+Test PR 發出後，**持續監控 review comments 並自行處理**。
+
+```bash
+# 查看 PR 上的 review comments
+gh pr view {pr_number} --json reviews,comments --jq '.reviews[].body, .comments[].body'
+
+# 查看逐行 review comments
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | "[\(.path):\(.line)] \(.body)"'
+```
+
+收到 review comment 後：
+
+1. **閱讀所有 comments**，理解 reviewer 的要求
+2. **回覆 comment** 說明處理方式
+3. **修改測試程式碼**（仍在 `test/` 範圍內）
+4. **Commit 並推送**：
+   ```bash
+   git add test/
+   git commit -m "test: address review comments
+
+   - {修正描述}
+
+   Refs #{qa_issue_number}"
+   git push
+   ```
+5. **在 PR 上留言摘要**：
+   ```bash
+   gh pr comment {pr_number} --body "$(cat <<'BODY'
+   ## 🔄 Review Comments 已處理
+
+   | Comment | 處理方式 |
+   |---------|---------|
+   | {comment 摘要} | {修正描述} |
+
+   已推送新 commit，請重新 review。
+   BODY
+   )"
+   ```
+
+**Review 狀態處理**：
+- **CHANGES_REQUESTED** → 立即修正推送
+- **COMMENTED** → 閱讀，需要改就改，不需要就回覆說明
+- **APPROVED** → 等待合併
+
 ---
 
 ## Phase B：執行測試（Engineer 完成後）

@@ -171,6 +171,71 @@ BODY
 gh issue comment {feature_number} --body "🔧 Bug #{bug_number} 已修復，PR #{pr_number}"
 ```
 
+### 第七步：持續關注 PR Review Comments
+
+PR 發出後，**持續監控 review comments 並自行處理**。
+
+#### 檢查 review comments
+
+```bash
+# 查看 PR 上的 review comments
+gh pr view {pr_number} --json reviews,comments --jq '.reviews[].body, .comments[].body'
+
+# 查看逐行 review comments
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | "[\(.path):\(.line)] \(.body)"'
+```
+
+#### 處理 review comments
+
+收到 review comment 後：
+
+1. **閱讀所有 comments**，理解 reviewer 的要求
+2. **在對應的 comment 上回覆**說明處理方式：
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
+     -f body="已修正，見 commit {sha}"
+   ```
+3. **修改程式碼**（仍在 `dev/` 範圍內）
+4. **Commit 並推送**：
+   ```bash
+   git add {修改的檔案}
+   git commit -m "fix: address review comments
+
+   - {comment 1 的修正描述}
+   - {comment 2 的修正描述}
+
+   Refs #{issue_number}"
+   git push
+   ```
+5. **在 PR 上留言摘要**：
+   ```bash
+   gh pr comment {pr_number} --body "$(cat <<'BODY'
+   ## 🔄 Review Comments 已處理
+
+   | Comment | 處理方式 |
+   |---------|---------|
+   | {comment 摘要 1} | {修正描述} |
+   | {comment 摘要 2} | {修正描述} |
+
+   已推送新 commit，請重新 review。
+   BODY
+   )"
+   ```
+
+#### 監控頻率
+
+PR 發出後，定期檢查是否有新的 review comments：
+
+```bash
+# 檢查 PR 狀態和 review 狀態
+gh pr view {pr_number} --json state,reviewDecision,reviews \
+  --jq '{state: .state, decision: .reviewDecision, reviews: [.reviews[] | {author: .author.login, state: .state}]}'
+```
+
+- **CHANGES_REQUESTED** → 立即處理 comments 並推送修正
+- **COMMENTED** → 閱讀 comments，需要改就改，不需要就回覆說明
+- **APPROVED** → 無需動作，等待合併
+
 ## 程式碼規範
 
 - 遵循專案既有的 linter / formatter 設定
