@@ -1,16 +1,17 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # SpecFlow GitHub 初始化 Script
 # 用途：建立 issue labels、issue templates、PR template
-# 用法：bash init-github.sh [owner/repo]
+# 用法：sh init-github.sh [owner/repo]
+# 相容 macOS 內建 sh/bash (無需 bash 4+)
 
 REPO="${1:-}"
 
 if [ -z "$REPO" ]; then
   REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)
   if [ -z "$REPO" ]; then
-    echo "❌ 請提供 repo：bash init-github.sh owner/repo"
+    echo "❌ 請提供 repo：sh init-github.sh owner/repo"
     exit 1
   fi
 fi
@@ -22,30 +23,28 @@ echo "================================================"
 echo ""
 echo "📌 建立 Issue Labels..."
 
-declare -A LABELS=(
-  # 類型
-  ["spec"]="0E8A16|Spec 規格文件"
-  ["epic"]="3E4B9E|Epic 總覽"
-  ["sprint"]="C5DEF5|Sprint 追蹤"
-  ["feature"]="1D76DB|功能需求"
-  ["design"]="F9D0C4|UI 設計"
-  ["qa"]="D876E3|測試相關"
-  ["bug"]="B60205|Bug 缺陷"
-  # 狀態
-  ["blocked"]="E4E669|被阻塞"
-  ["in-progress"]="0075CA|進行中"
-  ["ready-for-review"]="7057FF|等待 Review"
-  ["ready-for-qa"]="D876E3|等待 QA 驗證"
-)
-
-for label in "${!LABELS[@]}"; do
-  IFS='|' read -r color description <<< "${LABELS[$label]}"
-  if gh label create "$label" --repo "$REPO" --color "$color" --description "$description" --force 2>/dev/null; then
-    echo "  ✅ $label"
+create_label() {
+  name="$1"; color="$2"; desc="$3"
+  if gh label create "$name" --repo "$REPO" --color "$color" --description "$desc" --force 2>/dev/null; then
+    echo "  ✅ $name"
   else
-    echo "  ⚠️  $label (可能已存在)"
+    echo "  ⚠️  $name (可能已存在)"
   fi
-done
+}
+
+# 類型
+create_label "spec"             "0E8A16" "Spec 規格文件"
+create_label "epic"             "3E4B9E" "Epic 總覽"
+create_label "sprint"           "C5DEF5" "Sprint 追蹤"
+create_label "feature"          "1D76DB" "功能需求"
+create_label "design"           "F9D0C4" "UI 設計"
+create_label "qa"               "D876E3" "測試相關"
+create_label "bug"              "B60205" "Bug 缺陷"
+# 狀態
+create_label "blocked"          "E4E669" "被阻塞"
+create_label "in-progress"      "0075CA" "進行中"
+create_label "ready-for-review" "7057FF" "等待 Review"
+create_label "ready-for-qa"     "D876E3" "等待 QA 驗證"
 
 # ---- Issue Templates ----
 echo ""
