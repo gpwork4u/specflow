@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Local docker compose (use .example files)
+dev/docker-compose.yml
+dev/.env
+
+# Test screenshots (generated at runtime)
+test/screenshots/
+
+# Node
+node_modules/
