@@ -1,0 +1,331 @@
+name: Sprint Complete Test
+
+# 當 PR merge 到 main 時觸發
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+jobs:
+  check-sprint:
+    # 只在 PR 被 merge（不是 close）時執行
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      sprint-ready: ${{ steps.check.outputs.ready }}
+      sprint-name: ${{ steps.check.outputs.sprint_name }}
+      sprint-number: ${{ steps.check.outputs.sprint_number }}
+      qa-issue: ${{ steps.check.outputs.qa_issue }}
+    steps:
+      - name: Check if current sprint is complete
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+
+          # 找到當前 open 的 sprint milestone
+          MILESTONE=$(gh api "repos/$REPO/milestones?state=open&sort=title&direction=asc" \
+            --jq '[.[] | select(.title | startswith("Sprint"))][0]')
+
+          if [ -z "$MILESTONE" ] || [ "$MILESTONE" = "null" ]; then
+            echo "No open sprint milestone found"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MILESTONE_TITLE=$(echo "$MILESTONE" | jq -r '.title')
+          MILESTONE_NUMBER=$(echo "$MILESTONE" | jq -r '.number')
+          OPEN_ISSUES=$(echo "$MILESTONE" | jq -r '.open_issues')
+
+          echo "Sprint: $MILESTONE_TITLE"
+          echo "Open issues: $OPEN_ISSUES"
+          echo "sprint_name=$MILESTONE_TITLE" >> "$GITHUB_OUTPUT"
+          echo "sprint_number=$MILESTONE_NUMBER" >> "$GITHUB_OUTPUT"
+
+          # 檢查是否還有 open 的 feature/design issues
+          OPEN_FEATURE=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" \
+            --label "feature" --state open --json number --jq 'length')
+          OPEN_DESIGN=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" \
+            --label "design" --state open --json number --jq 'length')
+          OPEN_BUGS=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" \
+            --label "bug" --state open --json number --jq 'length')
+
+          # 找到 QA issue number
+          QA_ISSUE=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" \
+            --label "qa" --state open --json number --jq '.[0].number // empty')
+
+          echo "qa_issue=$QA_ISSUE" >> "$GITHUB_OUTPUT"
+          echo "Open features: $OPEN_FEATURE, designs: $OPEN_DESIGN, bugs: $OPEN_BUGS"
+
+          # 所有 feature + design 都關閉，且沒有 open bugs → sprint ready
+          if [ "$OPEN_FEATURE" = "0" ] && [ "$OPEN_DESIGN" = "0" ] && [ "$OPEN_BUGS" = "0" ]; then
+            echo "✅ Sprint complete — triggering full test"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Sprint not yet complete"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  sprint-test:
+    needs: check-sprint
+    if: needs.check-sprint.outputs.sprint-ready == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SPRINT_NAME: ${{ needs.check-sprint.outputs.sprint-name }}
+      QA_ISSUE: ${{ needs.check-sprint.outputs.qa-issue }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Prepare docker-compose
+        working-directory: dev
+        run: |
+          cp docker-compose.example.yml docker-compose.yml
+          cp .env.example .env
+
+      - name: Start services
+        working-directory: dev
+        run: |
+          docker compose up -d --build
+          echo "Waiting for services..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+              echo "✅ Services ready"
+              break
+            fi
+            echo "  Waiting... ($i/30)"
+            sleep 2
+          done
+
+      - name: Docker service status
+        id: docker-status
+        working-directory: dev
+        run: |
+          STATUS=$(docker compose ps)
+          echo "status<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$STATUS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "$STATUS"
+
+      - name: Install dependencies
+        working-directory: dev
+        run: npm ci || npm install
+
+      - name: Run unit tests
+        id: unit-tests
+        working-directory: dev
+        continue-on-error: true
+        run: |
+          RESULT=$(npm test 2>&1) || true
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "result<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$RESULT" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "$RESULT"
+          exit $EXIT_CODE
+
+      - name: Run API E2E tests
+        id: api-tests
+        continue-on-error: true
+        run: |
+          RESULT=$(BASE_URL=http://localhost:3000 npm test -- --testPathPattern=e2e 2>&1) || true
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "result<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$RESULT" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "$RESULT"
+          exit $EXIT_CODE
+
+      - name: Install agent-browser
+        run: |
+          npm install -g agent-browser
+          agent-browser install
+
+      - name: Run browser tests
+        id: browser-tests
+        continue-on-error: true
+        run: |
+          export BASE_URL=http://localhost:3000
+          mkdir -p test/screenshots
+          PASS=0; FAIL=0
+          for script in test/browser/f*.sh; do
+            [ -f "$script" ] || continue
+            echo "Running: $script"
+            OUTPUT=$(bash "$script" 2>&1) || true
+            P=$(echo "$OUTPUT" | grep -c "✅" || true)
+            F=$(echo "$OUTPUT" | grep -c "❌" || true)
+            PASS=$((PASS + P)); FAIL=$((FAIL + F))
+            echo "$OUTPUT"
+          done
+          echo "pass=$PASS" >> "$GITHUB_OUTPUT"
+          echo "fail=$FAIL" >> "$GITHUB_OUTPUT"
+          [ "$FAIL" -eq 0 ]
+
+      - name: Stop services
+        if: always()
+        working-directory: dev
+        run: docker compose down
+
+      - name: Generate test report
+        if: always()
+        id: report
+        run: |
+          mkdir -p test/reports
+          SPRINT_NUM=$(echo "$SPRINT_NAME" | grep -oP '\d+' | head -1)
+          REPORT="test/reports/sprint-${SPRINT_NUM}-test-report.md"
+          TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+          UNIT_OK=${{ steps.unit-tests.outcome == 'success' && '✅ PASS' || '❌ FAIL' }}
+          API_OK=${{ steps.api-tests.outcome == 'success' && '✅ PASS' || '❌ FAIL' }}
+          BROWSER_FAIL=${{ steps.browser-tests.outputs.fail || '0' }}
+          BROWSER_OK=$([ "${BROWSER_FAIL}" = "0" ] && echo "✅ PASS" || echo "❌ FAIL")
+
+          ALL_PASS=true
+          [ "${{ steps.unit-tests.outcome }}" != "success" ] && ALL_PASS=false
+          [ "${{ steps.api-tests.outcome }}" != "success" ] && ALL_PASS=false
+          [ "${BROWSER_FAIL}" != "0" ] && ALL_PASS=false
+
+          cat > "$REPORT" << EOF
+          # ${SPRINT_NAME} Test Report
+
+          ## 測試資訊
+          - **日期**：${TIMESTAMP}
+          - **環境**：GitHub Actions (Docker Compose)
+          - **觸發**：PR #${{ github.event.pull_request.number }} merged
+          - **Commit**：${{ github.sha }}
+
+          ## Docker Services
+          \`\`\`
+          ${{ steps.docker-status.outputs.status }}
+          \`\`\`
+
+          ## 測試結果
+
+          | 測試類型 | 結果 |
+          |----------|------|
+          | Unit Tests | ${UNIT_OK} |
+          | API E2E Tests | ${API_OK} |
+          | Browser Tests (agent-browser) | ${BROWSER_OK} |
+
+          $(if [ "$ALL_PASS" = "true" ]; then
+            echo "## ✅ ALL TESTS PASSED — Ready for release"
+          else
+            echo "## ❌ TESTS FAILED — Not ready for release"
+          fi)
+
+          ## 詳細結果
+
+          ### Unit Tests
+          \`\`\`
+          ${{ steps.unit-tests.outputs.result }}
+          \`\`\`
+
+          ### API E2E Tests
+          \`\`\`
+          ${{ steps.api-tests.outputs.result }}
+          \`\`\`
+
+          ### Browser Tests
+          - Pass: ${{ steps.browser-tests.outputs.pass || '0' }}
+          - Fail: ${BROWSER_FAIL}
+
+          ---
+          *Generated by SpecFlow CI*
+          EOF
+
+          # 去掉前導空白
+          sed -i 's/^          //' "$REPORT"
+
+          echo "report_path=$REPORT" >> "$GITHUB_OUTPUT"
+          echo "all_pass=$ALL_PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint-test-report
+          path: test/reports/
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-screenshots
+          path: test/screenshots/
+          if-no-files-found: ignore
+
+      - name: Commit test report
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add test/reports/ || true
+          git commit -m "test: ${{ env.SPRINT_NAME }} test report [skip ci]" || true
+          git push || true
+
+      - name: Post result to QA issue
+        if: always() && env.QA_ISSUE != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ALL_PASS="${{ steps.report.outputs.all_pass }}"
+          UNIT="${{ steps.unit-tests.outcome == 'success' && '✅' || '❌' }}"
+          API="${{ steps.api-tests.outcome == 'success' && '✅' || '❌' }}"
+          BFAIL="${{ steps.browser-tests.outputs.fail || '0' }}"
+          BROWSER=$([ "$BFAIL" = "0" ] && echo "✅" || echo "❌")
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          gh issue comment "$QA_ISSUE" --repo "${{ github.repository }}" --body "$(cat <<BODY
+          ## 📊 Sprint 自動測試結果
+
+          | 測試類型 | 結果 |
+          |----------|------|
+          | Unit Tests | $UNIT |
+          | API E2E | $API |
+          | Browser | $BROWSER |
+
+          $(if [ "$ALL_PASS" = "true" ]; then
+            echo "### ✅ ALL TESTS PASSED"
+          else
+            echo "### ❌ TESTS FAILED"
+          fi)
+
+          **Report**: \`test/reports/\`
+          **CI Run**: [View Details]($RUN_URL)
+          **Trigger**: PR #${{ github.event.pull_request.number }}
+          BODY
+          )"
+
+      - name: Post result to sprint issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ALL_PASS="${{ steps.report.outputs.all_pass }}"
+          VERDICT=$([ "$ALL_PASS" = "true" ] && echo "✅ PASS" || echo "❌ FAIL")
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          # 找到 sprint issue
+          SPRINT_ISSUE=$(gh issue list --repo "${{ github.repository }}" \
+            --label "sprint" --milestone "$SPRINT_NAME" --state open \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "$SPRINT_ISSUE" ]; then
+            gh issue comment "$SPRINT_ISSUE" --repo "${{ github.repository }}" \
+              --body "🤖 Sprint 自動測試 $VERDICT — [CI Run]($RUN_URL)"
+          fi
+
+      - name: Fail if tests failed
+        if: steps.report.outputs.all_pass != 'true'
+        run: exit 1

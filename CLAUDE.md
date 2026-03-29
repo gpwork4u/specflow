@@ -60,7 +60,7 @@ project/
   │           dev/實作  test/ design/元件
   │                 └─────┬─────┘
   │                       ▼
-  │                 Sprint 完整測試（Release Gate）
+  │                 Sprint 完整測試（自動觸發 via GitHub Actions）
   │                 docker compose up → unit + API + browser → test report
   │                       │
   │              ┌─ 失敗 → bug issue（附截圖）→ 修復 → 重測 ─┐
@@ -105,9 +105,19 @@ Epic #1（索引 + 需求）
 | `/specflow:verify` | 三維度驗證 sprint | 不需要 |
 | `/specflow:release` | 確認 sprint release | 確認 |
 
+## 自動測試
+
+當 sprint 的所有 feature/design PR merge 到 main 後，**GitHub Actions 自動執行**：
+1. docker compose up（從 example 建立）
+2. Unit tests → API E2E tests → Browser tests
+3. 產出 test report（commit 到 `test/reports/`）
+4. 結果自動回報到 QA issue 和 Sprint issue
+
+不需要手動觸發。
+
 ## 前置工具
 
-- [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) — 本地部署 + release 前完整測試
+- [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) — 本地部署 + CI 測試
 - [agent-browser](https://github.com/vercel-labs/agent-browser) — `npm install -g agent-browser && agent-browser install`
 
 ## 語言
