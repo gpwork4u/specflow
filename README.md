@@ -376,6 +376,7 @@ Wave 2（有依賴）：
 ```
 your-project/
 ├── .claude/
+│   ├── settings.json            # 權限設定（auto-accept rules）
 │   ├── agents/
 │   │   ├── spec-writer.md       # 產品規格專家
 │   │   ├── tech-lead.md         # 技術主管
@@ -444,6 +445,23 @@ your-project/
 ---
 
 ## 自訂與擴展
+
+### 權限設定（Auto Accept）
+
+專案內建 `.claude/settings.json`，預設 auto-accept 所有 specflow 工作流所需的工具權限：
+
+- **Agent** — 啟動 sub-agent（spec-writer、tech-lead、engineer、qa-engineer、verifier）
+- **Bash** — git、gh、docker、node、python 等常用指令
+- **檔案操作** — Read、Write、Edit、Glob、Grep
+- **網路** — WebSearch、WebFetch
+
+安全限制（deny list）：
+- `rm -rf /` / `rm -rf /*`
+- `git push --force`
+- `git reset --hard`
+- `git clean -f`
+
+如需調整，編輯 `.claude/settings.json` 的 `permissions.allow` / `permissions.deny`。
 
 ### 調整 Agent 行為
 
