@@ -9,6 +9,8 @@
 
 其餘全部由 agent 背景自動完成。
 
+**[Demo](https://gpwork4u.github.io/specflow/?repo=gpwork4u%2Fspecflow-demo)** — 查看 SpecFlow 實際運作的範例專案
+
 ---
 
 ## 安裝
