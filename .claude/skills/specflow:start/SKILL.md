@@ -76,7 +76,7 @@ Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
 所有 engineer PR + QA test PR 完成後，QA 執行 sprint 完整測試：
 1. 用 `dev/docker-compose.yml` 啟動完整服務環境
 2. 對跑起來的服務執行 API e2e tests
-3. 對跑起來的服務執行 agent-browser browser tests
+3. 對跑起來的服務執行 Playwright browser tests
 4. 停止服務
 5. 全部通過 → Phase 5.5
 6. 有失敗 → QA 建 bug issue（附截圖）→ engineer 修復 → 重測（最多 3 輪）
@@ -97,9 +97,14 @@ Verifier 檢查：
 - WARNING → Phase 6（附帶建議）
 - FAIL → 建 bug issue → engineer 修復 → 重新驗證
 
-### Phase 6：Sprint 完成通知（使用者確認）
+### Phase 6：自動產出工作日誌 + 關閉 Sprint
 
-**只有 QA 完整測試通過 + 三維度驗證通過才會進到這一步。**
+**QA 完整測試通過 + 三維度驗證通過後自動執行，不需使用者介入。**
+
+1. 產出 Sprint 工作日誌到 `specs/logs/sprint-{N}-log.md`
+2. 在 Epic issue 留言 Sprint 報告
+3. 關閉 Sprint Milestone + Sprint Issue
+4. 通知使用者 Sprint 完成摘要
 
 ```
 ✅ Sprint {N} 完成！
@@ -110,17 +115,29 @@ Features: X | PRs: X | Bugs fixed: X
 🧪 完整測試結果（docker compose 環境）：
   Unit Tests: X passed
   API E2E Tests: X passed
-  Browser Tests: X passed (agent-browser)
+  Browser Tests: X passed (Playwright)
 
 ✅ Verify: PASS（Completeness + Correctness + Coherence）
 
+📋 工作日誌：specs/logs/sprint-{N}-log.md
 驗證報告：specs/verify-sprint-{N}.md
-請使用 /specflow:release 確認發佈。
+```
+
+### Phase 7：自動推進下一個 Sprint
+
+如果有下一個 sprint milestone，**自動啟動** Phase 3（tech-lead）→ Phase 4（engineer + qa）→ ...
+
+如果所有 sprint 都完成，通知使用者：
+```
+🎉 所有 Sprint 完成！專案開發完畢。
+使用 /specflow:release 部署到 production。
 ```
 
 ## 重要
 
-- **只有 spec 討論和 release 確認需要使用者**
+- **只有 spec 討論需要使用者互動**
+- **Sprint 之間的推進完全自動**，不需手動 release
+- `/specflow:release` 僅用於 production 部署確認
 - `specs/` 目錄是 source of truth，所有 agent 從這裡讀取規格
 - 依賴分析自動化，不需手動判斷 wave
 - 三維度驗證確保交付品質

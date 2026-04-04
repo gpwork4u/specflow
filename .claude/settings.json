@@ -63,7 +63,7 @@
       "Bash(jq *)",
       "Bash(sort *)",
       "Bash(brew *)",
-      "Bash(agent-browser *)",
+      "Bash(npx playwright *)",
       "Bash(rm /tmp/*)",
       "Bash(rm -r /tmp/*)",
       "Bash(rm -rf /tmp/*)"

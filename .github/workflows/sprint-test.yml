@@ -145,30 +145,26 @@ jobs:
           echo "$RESULT"
           exit $EXIT_CODE
 
-      - name: Install agent-browser
+      - name: Install Playwright
+        working-directory: test
         run: |
-          npm install -g agent-browser
-          agent-browser install
+          npm ci || npm install
+          npx playwright install --with-deps chromium
 
       - name: Run browser tests
         id: browser-tests
         continue-on-error: true
+        working-directory: test
         run: |
           export BASE_URL=http://localhost:3000
-          mkdir -p test/screenshots
-          PASS=0; FAIL=0
-          for script in test/browser/f*.sh; do
-            [ -f "$script" ] || continue
-            echo "Running: $script"
-            OUTPUT=$(bash "$script" 2>&1) || true
-            P=$(echo "$OUTPUT" | grep -c "✅" || true)
-            F=$(echo "$OUTPUT" | grep -c "❌" || true)
-            PASS=$((PASS + P)); FAIL=$((FAIL + F))
-            echo "$OUTPUT"
-          done
+          mkdir -p screenshots
+          RESULT=$(npx playwright test --reporter=json 2>&1) || true
+          EXIT_CODE=$?
+          PASS=$(echo "$RESULT" | jq '.stats.expected // 0')
+          FAIL=$(echo "$RESULT" | jq '.stats.unexpected // 0')
           echo "pass=$PASS" >> "$GITHUB_OUTPUT"
           echo "fail=$FAIL" >> "$GITHUB_OUTPUT"
-          [ "$FAIL" -eq 0 ]
+          exit $EXIT_CODE
 
       - name: Stop services
         if: always()
@@ -214,7 +210,7 @@ jobs:
           |----------|------|
           | Unit Tests | ${UNIT_OK} |
           | API E2E Tests | ${API_OK} |
-          | Browser Tests (agent-browser) | ${BROWSER_OK} |
+          | Browser Tests (Playwright) | ${BROWSER_OK} |
 
           $(if [ "$ALL_PASS" = "true" ]; then
             echo "## ✅ ALL TESTS PASSED — Ready for release"

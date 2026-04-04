@@ -54,16 +54,16 @@ claude
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安裝
 - [GitHub CLI (`gh`)](https://cli.github.com/) 已安裝並登入
 - [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) 已安裝（本地部署 + 測試用）
-- [agent-browser](https://github.com/vercel-labs/agent-browser) 已安裝（QA 瀏覽器測試用）
+- [Playwright](https://playwright.dev/) 已安裝（QA 瀏覽器測試用）
 - 目標 GitHub repo 已建立且已 `git init`
 
 ```bash
 # 確認 Docker
 docker --version && docker compose version
 
-# agent-browser 安裝
-npm install -g agent-browser
-agent-browser install
+# Playwright 安裝
+npm install -D @playwright/test
+npx playwright install
 ```
 
 ---
@@ -92,9 +92,13 @@ agent-browser install
   │                 verifier（三維度驗證）                     │
   │                       │                                  │
   │              ┌─ FAIL → bug issue → 修復 → 重驗 ──────────┘
-  │              └─ PASS → 通知使用者
+  │              └─ PASS ↓
+  │                 自動產出工作日誌 → 關閉 milestone
+  │                       │
+  │                 ┌─ 有下一個 sprint → 自動啟動
+  │                 └─ 全部完成 → 通知使用者
   │
-/specflow:release ──→ 歸檔 specs → 關閉 milestone → 自動推進下一個 sprint
+/specflow:release ──→ 部署 production（使用者確認後執行）
 ```
 
 ### Phase 詳細說明
@@ -108,7 +112,8 @@ agent-browser install
 | 4b. 測試撰寫 | 在 `test/` 撰寫 e2e + browser tests | qa-engineer | 背景同步 |
 | 5. 測試驗證 | 執行 unit + e2e + browser tests，失敗建 bug issue（附截圖）| qa-engineer | 背景自動 |
 | 5.5 三維度驗證 | Completeness + Correctness + Coherence | verifier | 背景自動 |
-| 6. Release | 確認 sprint 交付，推進下一 sprint | 自動 | **確認 release** |
+| 6. 工作日誌 | 產出 sprint 工作日誌，關閉 milestone | verifier | 背景自動 |
+| 7. 自動推進 | 啟動下一個 sprint，或通知使用者全部完成 | 自動 | 背景自動 |
 
 ---
 
@@ -154,39 +159,42 @@ Spec 涵蓋：技術架構、API contract、data model、business rules、**WHEN
 | 層級 | 工具 | 時機 | 目的 |
 |------|------|------|------|
 | **API Tests** | test framework | 與 engineer 同時撰寫 | 驗證 API contract 正確性 |
-| **Browser Tests** | [agent-browser](https://github.com/vercel-labs/agent-browser) | engineer 完成後執行 | 驗證完整 UI 流程和使用者體驗 |
+| **Browser Tests** | [Playwright](https://playwright.dev/) | engineer 完成後執行 | 驗證完整 UI 流程和使用者體驗 |
 
 #### WHEN/THEN → Test 轉換
 
-| Scenario | API Test | Browser Test |
-|----------|----------|-------------|
-| GIVEN | test setup | `agent-browser open` + login |
-| WHEN | API call | `agent-browser fill` / `click` |
-| THEN | `expect()` | `agent-browser wait --text` + `screenshot` |
+| Scenario | API Test | Browser Test (Playwright) |
+|----------|----------|--------------------------|
+| GIVEN | test setup | `page.goto()` + login |
+| WHEN | API call | `page.fill()` / `page.click()` |
+| THEN | `expect()` | `expect(page.getByText()).toBeVisible()` + `page.screenshot()` |
 
-#### agent-browser 核心循環
+#### Playwright 核心範例
 
-```bash
-agent-browser open "$URL"              # 導航
-agent-browser wait --load networkidle  # 等待載入
-agent-browser snapshot -i              # 取得元素 @ref
-agent-browser fill @e1 "value"         # 互動
-agent-browser click @e2                # 點擊
-agent-browser wait --load networkidle  # 等待結果
-agent-browser snapshot -i              # 重新取得 @ref（DOM 變了！）
-agent-browser screenshot "result.png"  # 截圖
+```typescript
+import { test, expect } from '@playwright/test';
+
+test('example', async ({ page }) => {
+  await page.goto(BASE_URL);                        // 導航
+  await page.waitForLoadState('networkidle');        // 等待載入
+  await page.fill('[name="field"]', 'value');        // 互動
+  await page.click('button[type="submit"]');         // 點擊
+  await page.waitForLoadState('networkidle');        // 等待結果
+  await expect(page.getByText('成功')).toBeVisible(); // 驗證
+  await page.screenshot({ path: 'result.png' });    // 截圖
+});
 ```
 
 #### Bug Issue 附截圖
 
-測試失敗時，agent-browser 自動截圖，截圖會附在 bug issue 中：
+API test 或 Browser test 任一失敗時，自動截圖並建立 bug issue 通知 engineer：
 
 ```markdown
 ## Screenshot（測試失敗時的畫面）
 ![Bug Screenshot](screenshot-url)
 
-## 頁面狀態
-（agent-browser snapshot 輸出）
+## Playwright Trace
+下載 trace 進行詳細除錯
 ```
 
 讓 engineer 不需重現就能直觀理解問題。
@@ -214,6 +222,8 @@ specs/
 ├── overview.md                  # 專案概述 + 技術架構
 ├── dependencies.md              # 依賴圖譜（tech-lead 自動產生）
 ├── verify-sprint-{N}.md         # 驗證報告（verifier 產生）
+├── logs/                        # Sprint 工作日誌
+│   └── sprint-{N}-log.md
 ├── features/
 │   ├── f001-{name}.md           # Feature spec（含 WHEN/THEN scenarios）
 │   ├── f002-{name}.md
@@ -360,7 +370,7 @@ Wave 2（有依賴）：
 | `/specflow:init` | 初始化 GitHub repo 的 labels 和 issue templates | 首次一次 |
 | `/specflow:start [主題]` | 啟動完整流程：spec 對話 → 自動到底 | 對話確認 spec |
 | `/specflow:verify` | 三維度驗證（Completeness + Correctness + Coherence）| 不需要 |
-| `/specflow:release` | 確認 sprint release，自動推進下一個 | 確認發佈 |
+| `/specflow:release` | 部署 production（所有 sprint 完成後） | 確認部署 |
 
 ### 進階指令
 
@@ -400,6 +410,8 @@ your-project/
 │   ├── overview.md
 │   ├── dependencies.md           # tech-lead 自動產生
 │   ├── verify-sprint-{N}.md      # verifier 產生
+│   ├── logs/                     # Sprint 工作日誌
+│   │   └── sprint-{N}-log.md
 │   ├── features/
 │   │   └── f{N}-{name}.md
 │   └── changes/
@@ -420,7 +432,7 @@ your-project/
 │   │   ├── setup.ts
 │   │   ├── helpers.ts
 │   │   └── f{N}-{name}.test.ts
-│   ├── browser/                  # agent-browser UI tests
+│   ├── browser/                  # Playwright UI tests
 │   │   ├── setup.sh
 │   │   ├── helpers.sh
 │   │   └── f{N}-{name}.sh

@@ -38,6 +38,7 @@ project/
 │   ├── tech-survey.md
 │   ├── features/
 │   ├── dependencies.md
+│   ├── logs/              ← Sprint 工作日誌
 │   └── changes/
 ```
 
@@ -68,9 +69,13 @@ project/
   │                 verifier（三維度驗證）                     │
   │                       │                                  │
   │              ┌─ FAIL → 修復 → 重驗 ──────────────────────┘
-  │              └─ PASS → 通知使用者
+  │              └─ PASS ↓
+  │                 自動產出工作日誌 → 關閉 milestone
+  │                       │
+  │                 ┌─ 有下一個 sprint → 自動啟動
+  │                 └─ 全部完成 → 通知使用者
   │
-/specflow:release ──→ Release Gate → 關閉 milestone → 下一個 sprint
+/specflow:release ──→ 部署 production（使用者確認後執行）
 ```
 
 ## GitHub Issue 架構
@@ -102,8 +107,8 @@ Epic #1（索引 + 需求）
 |------|------|-----------|
 | `/specflow:init` | 初始化 labels + templates | 首次一次 |
 | `/specflow:start [主題]` | 啟動完整流程 | 對話確認 spec |
-| `/specflow:verify` | 三維度驗證 sprint | 不需要 |
-| `/specflow:release` | 確認 sprint release | 確認 |
+| `/specflow:verify` | 三維度驗證 sprint | 不需要（自動） |
+| `/specflow:release` | 部署 production | 確認部署 |
 
 ## 自動測試
 
@@ -118,7 +123,7 @@ Epic #1（索引 + 需求）
 ## 前置工具
 
 - [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) — 本地部署 + CI 測試
-- [agent-browser](https://github.com/vercel-labs/agent-browser) — `npm install -g agent-browser && agent-browser install`
+- [Playwright](https://playwright.dev/) — `npm install -D @playwright/test && npx playwright install`
 
 ## 語言
 
