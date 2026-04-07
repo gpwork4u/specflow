@@ -450,7 +450,7 @@ your-project/
 
 ### UI/UX Pro Max Skill
 
-UI Designer agent 整合了 [UI/UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)（MIT License, by [NextLevelBuilder](https://github.com/nextlevelbuilder)）作為設計智慧引擎，提供 67 種 UI Styles、161 組 Color Palettes、57 組 Font Pairings、99 條 UX Guidelines。在 `/specflow:init` 時自動安裝。
+UI Designer agent 的設計規則參考自 [UI/UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)（MIT License, by [NextLevelBuilder](https://github.com/nextlevelbuilder)），包含 10 級優先度的 UI/UX 設計規則和 Pre-Delivery Checklist，涵蓋 Accessibility、Touch & Interaction、Performance、Style、Layout、Typography、Animation 等面向。
 
 ### OpenSpec
 

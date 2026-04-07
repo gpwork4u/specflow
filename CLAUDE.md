@@ -132,7 +132,6 @@ Epic #1（索引 + 需求）
 
 - [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) — 本地部署 + CI 測試
 - [Playwright](https://playwright.dev/) — `npm install -D @playwright/test && npx playwright install`
-- [UI/UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) — UI Designer agent 使用的設計智慧引擎（`/specflow:init` 自動安裝）
 
 ## 語言
 
