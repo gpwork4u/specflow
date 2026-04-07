@@ -71,9 +71,31 @@ Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
 Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
 ```
 
+### Phase 4.5：Code Review（每個 PR 完成後自動觸發）
+
+Engineer 或 QA 發 PR 後，**自動啟動 code-review agent** 進行審查：
+
+```
+# 使用 sonnet 模型（只讀不寫，節省 token 成本）
+Agent(subagent_type="code-review", run_in_background=true)
+  input: PR #{pr_number}, Issue #{issue_number}
+```
+
+**Review Loop（最多 3 輪）**：
+1. code-review agent 審查 PR → APPROVE / REQUEST_CHANGES
+2. REQUEST_CHANGES → 通知對應的 engineer/qa agent 處理 review comments → 推送修正
+3. code-review agent 重新 review
+4. APPROVED → PR ready to merge
+
+**重要**：
+- Branch protection 要求 1 approval + 所有 conversation resolved 才能 merge
+- code-review 使用 sonnet 模型，因為只需要閱讀和判斷，不需要生成程式碼
+- engineer 已有處理 review comments 的機制（見 engineer.md 第七步）
+- 所有 PR 通過 review 並合併後 → Phase 5
+
 ### Phase 5：Sprint 完整測試（全部完成後自動）
 
-所有 engineer PR + QA test PR 完成後，QA 執行 sprint 完整測試：
+所有 engineer PR + QA test PR **通過 code review 並合併後**，QA 執行 sprint 完整測試：
 1. 用 `dev/docker-compose.yml` 啟動完整服務環境
 2. 對跑起來的服務執行 API e2e tests
 3. 對跑起來的服務執行 Playwright browser tests
