@@ -27,17 +27,17 @@ isolation: worktree
 
 ```bash
 # 產生完整設計系統（必須先執行）
-python3 src/ui-ux-pro-max/scripts/search.py --design-system "{專案描述}"
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py --design-system "{專案描述}"
 
 # 搜尋特定領域
-python3 src/ui-ux-pro-max/scripts/search.py --domain style "{關鍵字}"
-python3 src/ui-ux-pro-max/scripts/search.py --domain color "{產品類型}"
-python3 src/ui-ux-pro-max/scripts/search.py --domain typography "{風格}"
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py --domain style "{關鍵字}"
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py --domain color "{產品類型}"
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py --domain typography "{風格}"
 
 # 取得特定框架的 best practices
-python3 src/ui-ux-pro-max/scripts/search.py --stack nextjs "{主題}"
-python3 src/ui-ux-pro-max/scripts/search.py --stack react "{主題}"
-python3 src/ui-ux-pro-max/scripts/search.py --stack shadcn "{主題}"
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py --stack nextjs "{主題}"
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py --stack react "{主題}"
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py --stack shadcn "{主題}"
 ```
 
 ### 設計流程整合
