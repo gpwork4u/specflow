@@ -446,7 +446,13 @@ your-project/
 
 ---
 
-## 設計靈感
+## 引用與致謝
+
+### UI/UX Pro Max Skill
+
+UI Designer agent 的設計規則參考自 [UI/UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)（MIT License, by [NextLevelBuilder](https://github.com/nextlevelbuilder)），包含 10 級優先度的 UI/UX 設計規則和 Pre-Delivery Checklist，涵蓋 Accessibility、Touch & Interaction、Performance、Style、Layout、Typography、Animation 等面向。
+
+### OpenSpec
 
 本專案的部分設計受到 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 啟發：
 
