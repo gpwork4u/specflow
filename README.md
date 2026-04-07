@@ -446,7 +446,13 @@ your-project/
 
 ---
 
-## 設計靈感
+## 引用與致謝
+
+### UI/UX Pro Max Skill
+
+UI Designer agent 整合了 [UI/UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)（MIT License, by [NextLevelBuilder](https://github.com/nextlevelbuilder)）作為設計智慧引擎，提供 67 種 UI Styles、161 組 Color Palettes、57 組 Font Pairings、99 條 UX Guidelines。在 `/specflow:init` 時自動安裝。
+
+### OpenSpec
 
 本專案的部分設計受到 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 啟發：
 

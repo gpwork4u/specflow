@@ -249,6 +249,24 @@ else
   echo "     - Dismiss stale reviews on push"
 fi
 
+# ---- UI/UX Skill ----
+echo ""
+echo "🎨 安裝 UI/UX Pro Max Skill..."
+
+if command -v npx > /dev/null 2>&1; then
+  if npx uipro-cli init --ai claude 2>/dev/null; then
+    echo "  ✅ UI/UX Pro Max Skill 已安裝"
+    echo "     UI Designer agent 將自動使用此 skill 進行設計"
+  else
+    echo "  ⚠️  UI/UX Pro Max Skill 安裝失敗"
+    echo "     請手動安裝：npx uipro-cli init --ai claude"
+    echo "     詳見：https://github.com/nextlevelbuilder/ui-ux-pro-max-skill"
+  fi
+else
+  echo "  ⚠️  npx 未找到，跳過 UI/UX Skill 安裝"
+  echo "     請先安裝 Node.js，再手動執行：npx uipro-cli init --ai claude"
+fi
+
 # ---- 完成 ----
 echo ""
 echo "================================================"
