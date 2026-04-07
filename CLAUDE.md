@@ -8,14 +8,15 @@
 
 ## 角色分工
 
-| 角色 | 職責 | 工作目錄 | 產出 |
-|------|------|---------|------|
-| **spec-writer** | 與使用者討論需求 | `specs/` | Epic + Sprint issues |
-| **tech-lead** | 技術 survey + 開 issue 分配工作 | `specs/` | tech-survey.md + Feature/QA/Design issues |
-| **ui-designer** | 建立可重用 UI component dataset | `design/` | Design tokens + 元件規格 + 範例 |
-| **engineer** | 認領 feature / bug，寫程式 + unit test | `dev/` | PR（Closes #issue） |
-| **qa-engineer** | 認領 QA issue，寫 e2e + browser test | `test/` | Test PR + Bug issues（附截圖） |
-| **verifier** | 三維度驗證 sprint 交付品質 | `specs/` | 驗證報告 |
+| 角色 | 職責 | 工作目錄 | 產出 | Model |
+|------|------|---------|------|-------|
+| **spec-writer** | 與使用者討論需求 | `specs/` | Epic + Sprint issues | opus |
+| **tech-lead** | 技術 survey + 開 issue 分配工作 | `specs/` | tech-survey.md + Feature/QA/Design issues | opus |
+| **ui-designer** | 建立可重用 UI component dataset | `design/` | Design tokens + 元件規格 + 範例 | opus |
+| **engineer** | 認領 feature / bug，寫程式 + unit test | `dev/` | PR（Closes #issue） | opus |
+| **qa-engineer** | 認領 QA issue，寫 e2e + browser test | `test/` | Test PR + Bug issues（附截圖） | opus |
+| **code-review** | 審查 PR 品質、spec 一致性、安全性 | 唯讀 | PR Review（approve / request changes） | sonnet |
+| **verifier** | 三維度驗證 sprint 交付品質 | `specs/` | 驗證報告 | opus |
 
 ## 目錄分區
 
@@ -61,6 +62,12 @@ project/
   │           dev/實作  test/ design/元件
   │                 └─────┬─────┘
   │                       ▼
+  │                 code-review（sonnet，每個 PR 自動審查）
+  │                       │
+  │              ┌─ REQUEST_CHANGES → engineer 修改 → 重新 review（最多 3 輪）
+  │              └─ APPROVED ↓
+  │                 merge PR（需 1 approval + conversations resolved）
+  │                       ▼
   │                 Sprint 完整測試（自動觸發 via GitHub Actions）
   │                 docker compose up → unit + API + browser → test report
   │                       │
@@ -100,6 +107,7 @@ Epic #1（索引 + 需求）
 | `design` | UI 設計（ui-designer） |
 | `qa` | QA 測試（qa-engineer） |
 | `bug` | Bug（engineer） |
+| `code-review` | Code Review |
 
 ## 指令
 

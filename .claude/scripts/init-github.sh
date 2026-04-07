@@ -45,6 +45,7 @@ create_label "blocked"          "E4E669" "被阻塞"
 create_label "in-progress"      "0075CA" "進行中"
 create_label "ready-for-review" "7057FF" "等待 Review"
 create_label "ready-for-qa"     "D876E3" "等待 QA 驗證"
+create_label "code-review"      "6F42C1" "Code Review"
 
 # ---- Issue Templates ----
 echo ""
@@ -204,6 +205,49 @@ Closes #
 PRTEMPLATE
 
 echo "  ✅ PULL_REQUEST_TEMPLATE.md"
+
+# ---- Branch Protection (Ruleset) ----
+echo ""
+echo "🔒 設定 Branch Protection Rules..."
+
+RULESET_PAYLOAD=$(cat << 'RULESETJSON'
+{
+  "name": "main-protection",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews_on_push": true,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": true
+      }
+    }
+  ]
+}
+RULESETJSON
+)
+
+if echo "$RULESET_PAYLOAD" | gh api "repos/$REPO/rulesets" --method POST --input - > /dev/null 2>&1; then
+  echo "  ✅ Branch protection ruleset created"
+  echo "     - Require 1 approval before merge"
+  echo "     - Require all conversations resolved"
+  echo "     - Dismiss stale reviews on new push"
+else
+  echo "  ⚠️  Branch protection ruleset (may already exist or insufficient permissions)"
+  echo "     Please manually enable in Settings > Rules > Rulesets:"
+  echo "     - Require pull request reviews (1 approval)"
+  echo "     - Require conversation resolution before merge"
+  echo "     - Dismiss stale reviews on push"
+fi
 
 # ---- 完成 ----
 echo ""
