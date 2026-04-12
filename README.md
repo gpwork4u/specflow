@@ -24,7 +24,7 @@
 
 - [安裝](#安裝)
   - [安裝 Claude 版文件](#安裝-claude-版文件)
-  - [安裝 Codex 版 skill](#安裝-codex-版-skill)
+  - [安裝 Codex 版文件](#安裝-codex-版文件)
   - [共存建議](#共存建議)
 - [前置需求](#前置需求)
 - [工作流程](#工作流程)
@@ -45,13 +45,13 @@
 
 ### 安裝 Claude 版文件
 
-在你的專案 repo 中一行指令安裝：
+如果你要在 Claude Code 中使用，安裝 `.claude/` 與 `CLAUDE.md`：
 
 ```bash
 # 進入你的專案目錄
 cd /path/to/your/project
 
-# 從 GitHub 安裝 Claude 版 SpecFlow skills + agents
+# 從 GitHub 安裝 Claude 版文件
 git clone --depth 1 https://github.com/gpwork4u/specflow.git /tmp/specflow \
   && cp -r /tmp/specflow/.claude . \
   && cp /tmp/specflow/CLAUDE.md . \
@@ -67,7 +67,7 @@ curl -sL https://github.com/gpwork4u/specflow/archive/refs/heads/main.tar.gz \
   | tar xz --strip-components=1 -C . "specflow-main/.claude" "specflow-main/CLAUDE.md"
 ```
 
-安裝完成後啟動 Claude Code：
+安裝完成後，可用 Claude Code 啟動：
 
 ```bash
 claude
@@ -79,21 +79,23 @@ claude
 /specflow:start 我的專案名稱
 ```
 
-### 安裝 Codex 版 skill
+### 安裝 Codex 版文件
 
-如果你要在 Codex 中使用，複製 `.codex/skills/specflow` 即可：
+如果你要在 Codex 中使用，安裝 `.codex/skills/specflow`：
 
 ```bash
 # 進入你的專案目錄
 cd /path/to/your/project
 
-# 從 GitHub 安裝 Codex 版 skill
+# 從 GitHub 安裝 Codex 版文件
 git clone --depth 1 https://github.com/gpwork4u/specflow.git /tmp/specflow \
   && mkdir -p .codex/skills \
   && cp -r /tmp/specflow/.codex/skills/specflow .codex/skills/specflow \
   && rm -rf /tmp/specflow \
-  && echo "✅ SpecFlow Codex skill installed"
+  && echo "✅ SpecFlow installed"
 ```
+
+安裝完成後，可直接在 Codex 以自然語言觸發 `specflow` workflow。
 
 如果你想讓 Claude 與 Codex 共存，直接同時複製 `.claude/`、`CLAUDE.md` 與 `.codex/skills/specflow` 即可。
 
