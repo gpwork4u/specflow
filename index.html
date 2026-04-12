@@ -6,25 +6,25 @@
 <title>SpecFlow Dashboard</title>
 <style>
   :root {
-    --bg: #0d1117; --surface: #161b22; --border: #30363d;
-    --text: #e6edf3; --text-muted: #8b949e; --text-dim: #484f58;
-    --green: #3fb950; --blue: #58a6ff; --purple: #bc8cff;
-    --red: #f85149; --yellow: #d29922; --cyan: #39d2c0;
-    --green-bg: #0f2d1a; --blue-bg: #0c2d6b; --purple-bg: #271052;
-    --red-bg: #3d1214; --yellow-bg: #2d2306;
+    --bg: #f6f1e8; --surface: #fffaf0; --surface-strong: #fff;
+    --border: #d7c8ac; --text: #1f1a14; --text-muted: #6a5b49; --text-dim: #9f8e79;
+    --green: #246b45; --blue: #225d8c; --orange: #b75b2f; --red: #9f3527; --yellow: #a06a00; --cyan: #0e7490;
+    --green-bg: #e4f2e8; --blue-bg: #e2eef8; --orange-bg: #f8e6dd; --red-bg: #f7e4e1; --yellow-bg: #f8efcf;
+    --shadow: 0 10px 30px rgba(64, 43, 17, 0.08);
+    --hero: linear-gradient(135deg, #f3e5c8 0%, #f8f4ed 42%, #e7f0ef 100%);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  body { font-family: Georgia, 'Times New Roman', serif; background: radial-gradient(circle at top, #fffdf8 0%, var(--bg) 45%, #efe5d5 100%); color: var(--text); min-height: 100vh; }
 
   /* Header */
-  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; }
+  .header { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); background: rgba(255, 250, 240, 0.86); border-bottom: 1px solid rgba(215, 200, 172, 0.8); padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header h1 { font-size: 20px; font-weight: 700; white-space: nowrap; letter-spacing: 0.02em; }
   .header h1 span { color: var(--cyan); }
   .config { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 300px; }
-  .config input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 6px; font-size: 14px; }
+  .config input { background: var(--surface-strong); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 10px; font-size: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
   .config input:first-of-type { flex: 1; min-width: 200px; }
   .config input:last-of-type { width: 200px; }
-  .config button { background: var(--green); color: #000; border: none; padding: 6px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .config button { background: var(--green); color: #fff; border: none; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; box-shadow: var(--shadow); }
   .config button:hover { opacity: 0.9; }
   .config button:disabled { opacity: 0.5; cursor: wait; }
   .auto-refresh { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
@@ -32,22 +32,54 @@
   .last-update { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
 
   /* Layout */
-  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .container { max-width: 1380px; margin: 0 auto; padding: 28px 24px 64px; }
+  .hero { background: var(--hero); border: 1px solid var(--border); border-radius: 28px; padding: 32px; box-shadow: var(--shadow); margin-bottom: 24px; position: relative; overflow: hidden; }
+  .hero::after { content: ''; position: absolute; inset: auto -60px -60px auto; width: 220px; height: 220px; border-radius: 50%; background: rgba(34, 93, 140, 0.08); }
+  .hero-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; position: relative; }
+  .hero-kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--orange); margin-bottom: 14px; }
+  .hero h2 { font-size: clamp(32px, 4vw, 54px); line-height: 0.95; margin-bottom: 14px; max-width: 10ch; }
+  .hero p { font-size: 17px; line-height: 1.6; color: var(--text-muted); max-width: 62ch; }
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+  .hero-actions a { text-decoration: none; border-radius: 999px; padding: 10px 16px; font-size: 14px; font-weight: 700; }
+  .hero-actions a.primary { background: var(--text); color: #fff; }
+  .hero-actions a.secondary { border: 1px solid var(--border); color: var(--text); background: rgba(255,255,255,0.55); }
+  .hero-panel { background: rgba(255,255,255,0.55); border: 1px solid rgba(215, 200, 172, 0.85); border-radius: 20px; padding: 18px; display: grid; gap: 12px; align-self: start; }
+  .hero-panel h3 { font-size: 15px; }
+  .hero-panel p { font-size: 14px; line-height: 1.5; color: var(--text-muted); }
+  .hero-list { display: grid; gap: 10px; font-size: 14px; color: var(--text-muted); }
+  .hero-list strong { color: var(--text); }
+  .section { margin-bottom: 26px; }
+  .section-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 14px; }
+  .section-head p { color: var(--text-muted); max-width: 66ch; line-height: 1.5; font-size: 14px; }
+  .doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .doc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 20px; box-shadow: var(--shadow); display: grid; gap: 12px; }
+  .doc-card .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--orange); }
+  .doc-card h3 { font-size: 20px; }
+  .doc-card p { color: var(--text-muted); font-size: 14px; line-height: 1.55; }
+  .doc-card ul { list-style: none; display: grid; gap: 8px; font-size: 14px; color: var(--text-muted); }
+  .doc-card li { padding-left: 14px; position: relative; }
+  .doc-card li::before { content: '•'; position: absolute; left: 0; color: var(--cyan); }
+  .doc-card a { color: var(--blue); text-decoration: none; font-weight: 700; }
+  .doc-card a:hover { text-decoration: underline; }
+  .quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .quick-card { background: var(--surface-strong); border: 1px solid var(--border); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); }
+  .quick-card strong { display: block; margin-bottom: 8px; font-size: 14px; }
+  .quick-card code { background: #f0e4d1; padding: 2px 6px; border-radius: 6px; font-size: 12px; }
 
   /* Stats */
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
-  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }
   .stat-value { font-size: 28px; font-weight: 700; }
   .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
   /* Sprint */
   .sprint-section { margin-bottom: 24px; }
-  .sprint-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 12px; }
+  .sprint-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px; margin-bottom: 12px; box-shadow: var(--shadow); }
   .sprint-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .sprint-title { font-size: 16px; font-weight: 600; }
   .sprint-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
   .sprint-badge.open { background: var(--green-bg); color: var(--green); }
-  .sprint-badge.closed { background: var(--purple-bg); color: var(--purple); }
+  .sprint-badge.closed { background: var(--blue-bg); color: var(--blue); }
   .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
   .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
   .progress-fill.green { background: var(--green); }
@@ -56,34 +88,34 @@
 
   /* Pipeline */
   .pipeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-  .pipeline-col { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .pipeline-col { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
   .pipeline-col-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-  .pipeline-col-header .count { background: var(--border); color: var(--text-muted); font-size: 11px; padding: 1px 8px; border-radius: 10px; }
+  .pipeline-col-header .count { background: rgba(31,26,20,0.08); color: var(--text-muted); font-size: 11px; padding: 1px 8px; border-radius: 10px; }
   .pipeline-col-body { padding: 8px; max-height: 500px; overflow-y: auto; }
 
   /* Issue Cards */
-  .issue-card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s; }
+  .issue-card { background: #fffdf8; border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
   .issue-card:hover { border-color: var(--text-dim); }
   .issue-card-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; line-height: 1.4; }
   .issue-card-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .label { font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; line-height: 1.6; }
-  .label-feature { background: #1d76db30; color: var(--blue); }
-  .label-bug { background: #f8514930; color: var(--red); }
-  .label-qa { background: #d876e330; color: var(--purple); }
-  .label-spec { background: #0e8a1630; color: var(--green); }
-  .label-sprint { background: #c5def530; color: var(--cyan); }
+  .label-feature { background: #d8e9f7; color: var(--blue); }
+  .label-bug { background: #f5dfdb; color: var(--red); }
+  .label-qa { background: #e8dfce; color: var(--orange); }
+  .label-spec { background: #dfefe4; color: var(--green); }
+  .label-sprint { background: #dceff3; color: var(--cyan); }
   .issue-number { font-size: 11px; color: var(--text-dim); }
   .issue-state { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
   .issue-state.open { background: var(--green); }
-  .issue-state.closed { background: var(--purple); }
+  .issue-state.closed { background: var(--blue); }
 
   /* PR Cards */
-  .pr-card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s; }
+  .pr-card { background: #fffdf8; border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s; }
   .pr-card:hover { border-color: var(--text-dim); }
   .pr-card-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
   .pr-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
   .pr-status.open { background: var(--green-bg); color: var(--green); }
-  .pr-status.merged { background: var(--purple-bg); color: var(--purple); }
+  .pr-status.merged { background: var(--blue-bg); color: var(--blue); }
   .pr-status.closed { background: var(--red-bg); color: var(--red); }
   .pr-status.draft { background: var(--yellow-bg); color: var(--yellow); }
   .pr-review { font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 4px; }
@@ -104,10 +136,17 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* Error */
-  .error { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+  .error { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); padding: 12px 16px; border-radius: 14px; margin-bottom: 16px; font-size: 13px; }
 
   /* Section Title */
   .section-title { font-size: 14px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .dashboard-shell { background: rgba(255,250,240,0.68); border: 1px solid var(--border); border-radius: 24px; padding: 20px; box-shadow: var(--shadow); }
+  .dashboard-intro { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 18px; }
+  .dashboard-intro p { max-width: 64ch; color: var(--text-muted); line-height: 1.55; font-size: 14px; }
+  @media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; }
+    .dashboard-intro { display: grid; }
+  }
 </style>
 </head>
 <body>
@@ -129,11 +168,117 @@
 </div>
 
 <div class="container" id="app">
-  <div class="empty" style="padding:100px">
-    <p style="font-size:40px;margin-bottom:16px">&#9678;</p>
-    <p style="font-size:16px;color:var(--text)">SpecFlow Dashboard</p>
-    <p style="margin-top:8px">Enter <code style="background:var(--surface);padding:2px 6px;border-radius:4px">owner/repo</code> above to view project status</p>
-  </div>
+  <section class="hero">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-kicker">SpecFlow Directory</div>
+        <h2>讓 Claude 與 Codex 共用同一套專案交付地圖</h2>
+        <p>這個頁面同時扮演文件首頁與 GitHub dashboard。先用下方卡片理解 repo 內各入口文件的責任，再載入任意 `owner/repo` 查看 sprint、issues 與 PR 狀態。</p>
+        <div class="hero-actions">
+          <a class="primary" href="README.md">閱讀 README</a>
+          <a class="secondary" href="#dashboard">開啟 Dashboard</a>
+        </div>
+      </div>
+      <aside class="hero-panel">
+        <h3>共存原則</h3>
+        <div class="hero-list">
+          <div><strong>Claude</strong> 讀 `CLAUDE.md` 與 `.claude/`</div>
+          <div><strong>Codex</strong> 讀 `.codex/skills/specflow/`</div>
+          <div><strong>Shared Source</strong> 一律回到 `specs/` 作為 source of truth</div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <div class="section-title">Entry Points</div>
+        <p>不同工具讀不同入口文件，但討論需求、拆分功能、驗證交付時，仍共用同一組規格與 repo artifacts。</p>
+      </div>
+    </div>
+    <div class="doc-grid">
+      <article class="doc-card">
+        <div class="eyebrow">Claude</div>
+        <h3>`.claude/` + `CLAUDE.md`</h3>
+        <p>保留原本 Claude Code 的多 agent 與 slash commands 工作流，適合沿用既有 SpecFlow 操作方式。</p>
+        <ul>
+          <li>agents、skills、scripts 與權限設定都留在 `.claude/`</li>
+          <li>主要啟動指令是 `/specflow:init`、`/specflow:start`</li>
+        </ul>
+      </article>
+      <article class="doc-card">
+        <div class="eyebrow">Codex</div>
+        <h3>`.codex/skills/specflow`</h3>
+        <p>把 init、spec、plan、implement、qa、verify、release 整併為單一 Codex skill，改用自然語言觸發。</p>
+        <ul>
+          <li>phase 內容拆在 `references/*.md`</li>
+          <li>角色責任拆在 `references/roles/*.md`</li>
+        </ul>
+      </article>
+      <article class="doc-card">
+        <div class="eyebrow">Shared</div>
+        <h3>`specs/` Source of Truth</h3>
+        <p>不論使用哪個工具，需求、feature spec、變更記錄、驗證報告都應回到 `specs/`，避免流程漂移。</p>
+        <ul>
+          <li>feature specs、changes、logs、verify reports</li>
+          <li>issues 與 PR 只是狀態，不是最終規格來源</li>
+        </ul>
+      </article>
+      <article class="doc-card">
+        <div class="eyebrow">Visual</div>
+        <h3>GitHub Dashboard</h3>
+        <p>輸入 `owner/repo` 後，頁面會抓取 milestones、issues、PRs，幫你快速看 sprint 進度與 pipeline 狀態。</p>
+        <ul>
+          <li>公開 repo 可直接讀</li>
+          <li>私有 repo 可填 GitHub token</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <div class="section-title">Quick Orientation</div>
+        <p>如果是第一次打開這個 repo，先決定你要用 Claude 還是 Codex，再沿著對應入口工作；不要同時在兩邊維護不同版本的規格。</p>
+      </div>
+    </div>
+    <div class="quick-grid">
+      <div class="quick-card">
+        <strong>1. 安裝 Claude 文件</strong>
+        <code>.claude/ + CLAUDE.md</code>
+      </div>
+      <div class="quick-card">
+        <strong>2. 安裝 Codex skill</strong>
+        <code>.codex/skills/specflow</code>
+      </div>
+      <div class="quick-card">
+        <strong>3. 共同維護規格</strong>
+        <code>specs/</code>
+      </div>
+      <div class="quick-card">
+        <strong>4. 追蹤交付狀態</strong>
+        <code>GitHub issues / PRs / milestones</code>
+      </div>
+    </div>
+  </section>
+
+  <section class="dashboard-shell" id="dashboard">
+    <div class="dashboard-intro">
+      <div>
+        <div class="section-title">Live Dashboard</div>
+        <p>輸入 GitHub repository 後，可查看 sprint 進度、feature/bug pipeline 與 pull requests。這個 dashboard 保留原本功能，但現在放在文件首頁下方，讓閱讀與追蹤同一頁完成。</p>
+      </div>
+    </div>
+    <div id="dashboardApp">
+      <div class="empty" style="padding:72px 24px">
+        <p style="font-size:40px;margin-bottom:16px">&#9678;</p>
+        <p style="font-size:20px;color:var(--text);margin-bottom:8px">SpecFlow Dashboard</p>
+        <p style="margin-top:8px;color:var(--text-muted)">Enter <code style="background:#f0e4d1;padding:2px 6px;border-radius:4px">owner/repo</code> above to load sprint and PR status.</p>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -225,7 +370,7 @@ async function loadDashboard() {
 
   const btn = document.getElementById('loadBtn');
   btn.disabled = true; btn.textContent = 'Loading...';
-  const app = document.getElementById('app');
+  const app = document.getElementById('dashboardApp');
   app.innerHTML = '<div class="loading">Loading project data</div>';
 
   try {
@@ -287,7 +432,7 @@ function renderStats(features, bugs, qas, prs, mergedPRs) {
   return `<div class="stats">
     <div class="stat"><div class="stat-value" style="color:var(--blue)">${closedF}/${features.length}</div><div class="stat-label">Features Done</div></div>
     <div class="stat"><div class="stat-value" style="color:var(--red)">${bugs.length - closedB}</div><div class="stat-label">Open Bugs</div></div>
-    <div class="stat"><div class="stat-value" style="color:var(--purple)">${closedQ}/${qas.length}</div><div class="stat-label">QA Done</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--orange)">${closedQ}/${qas.length}</div><div class="stat-label">QA Done</div></div>
     <div class="stat"><div class="stat-value" style="color:var(--green)">${mergedPRs.length}</div><div class="stat-label">PRs Merged</div></div>
     <div class="stat"><div class="stat-value" style="color:var(--yellow)">${prs.filter(p=>p.state==='open').length}</div><div class="stat-label">PRs Open</div></div>
   </div>`;
@@ -321,7 +466,7 @@ function renderPipeline(features, bugs, qas, prs) {
     ${pipelineCol('Backlog', open, 'var(--text-muted)')}
     ${pipelineCol('In Progress', inProgress, 'var(--yellow)')}
     ${pipelineCol('In Review', inReview, 'var(--blue)')}
-    ${pipelineCol('QA Testing', inQA, 'var(--purple)')}
+    ${pipelineCol('QA Testing', inQA, 'var(--orange)')}
     ${pipelineCol('Done', done.slice(0, 20), 'var(--green)')}
   </div>`;
 }

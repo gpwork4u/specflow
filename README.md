@@ -1,13 +1,20 @@
 # SpecFlow
 
-基於 Claude Code 的自動化專案交付工作流。透過多個 AI agent 協作，將「需求討論 → 技術規劃 → 實作 → 測試 → 驗證」的完整流程自動化。
+支援 **Claude Code** 與 **Codex** 的自動化專案交付工作流。它把「需求討論 → 技術規劃 → 實作 → 測試 → 驗證 → release」整理成一套可以落地的 repo 內文件與 skill 結構。
 
-使用者只需要做兩件事：
+目前 repo 內同時提供兩套入口：
 
-1. 與 spec agent **對話確認需求**
-2. 每個 sprint 完成後**確認 release**
+1. `/.claude/` + `CLAUDE.md`
+   給 Claude Code 使用，保留原本多 agent / slash command 工作流。
+2. `/.codex/skills/specflow`
+   給 Codex 使用，將同一套流程整併成自然語言可觸發的單一 skill。
 
-其餘全部由 agent 背景自動完成。
+兩套文件可以 **共存於同一個專案**：
+
+- Claude 讀 `CLAUDE.md` 與 `.claude/`
+- Codex 讀 `.codex/skills/specflow/`
+- 共同的 source of truth 仍然是 repo 內的 `specs/`
+- 不需要二選一，也不需要為了其中一套工具刪除另一套文件
 
 **[Demo](https://gpwork4u.github.io/specflow/?repo=gpwork4u%2Fspecflow-demo)** — 查看 SpecFlow 實際運作的範例專案
 
@@ -15,13 +22,15 @@
 
 ## 安裝
 
+### 安裝 Claude 版文件
+
 在你的專案 repo 中一行指令安裝：
 
 ```bash
 # 進入你的專案目錄
 cd /path/to/your/project
 
-# 從 GitHub 安裝 SpecFlow skills + agents
+# 從 GitHub 安裝 Claude 版 SpecFlow skills + agents
 git clone --depth 1 https://github.com/gpwork4u/specflow.git /tmp/specflow \
   && cp -r /tmp/specflow/.claude . \
   && cp /tmp/specflow/CLAUDE.md . \
@@ -49,9 +58,36 @@ claude
 /specflow:start 我的專案名稱
 ```
 
+### 安裝 Codex 版 skill
+
+如果你要在 Codex 中使用，複製 `.codex/skills/specflow` 即可：
+
+```bash
+# 進入你的專案目錄
+cd /path/to/your/project
+
+# 從 GitHub 安裝 Codex 版 skill
+git clone --depth 1 https://github.com/gpwork4u/specflow.git /tmp/specflow \
+  && mkdir -p .codex/skills \
+  && cp -r /tmp/specflow/.codex/skills/specflow .codex/skills/specflow \
+  && rm -rf /tmp/specflow \
+  && echo "✅ SpecFlow Codex skill installed"
+```
+
+如果你想讓 Claude 與 Codex 共存，直接同時複製 `.claude/`、`CLAUDE.md` 與 `.codex/skills/specflow` 即可。
+
+### 共存建議
+
+- `specs/` 保持為唯一真實規格來源
+- Claude 專屬自動化設定放在 `.claude/`
+- Codex 專屬 skill 放在 `.codex/skills/`
+- README 只描述共用概念與安裝方式，不把某一個工具當成唯一入口
+- 若流程規則有更新，優先同步 `specs/` 與兩邊的 workflow 文件，避免行為漂移
+
 ## 前置需求
 
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安裝
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安裝（若使用 Claude）
+- Codex CLI / Codex 工作環境已可使用（若使用 Codex）
 - [GitHub CLI (`gh`)](https://cli.github.com/) 已安裝並登入
 - [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) 已安裝（本地部署 + 測試用）
 - [Playwright](https://playwright.dev/) 已安裝（QA 瀏覽器測試用）
@@ -69,6 +105,17 @@ npx playwright install
 ---
 
 ## 工作流程
+
+無論是 Claude 或 Codex，核心流程都圍繞同一組 artifacts：
+
+- `specs/` 負責需求、feature spec、變更與驗證報告
+- GitHub issues / PR 負責協作狀態
+- `dev/` 與 `test/` 分別隔離工程實作與 QA 驗證
+
+差異主要在「如何觸發」：
+
+- Claude：以 slash commands 與 agent orchestration 為主
+- Codex：以自然語言觸發 skill，並直接在當前 workspace 落地
 
 ```
 使用者操作              背景自動執行
@@ -387,6 +434,19 @@ Wave 2（有依賴）：
 
 ```
 your-project/
+├── .codex/
+│   └── skills/
+│       └── specflow/
+│           ├── SKILL.md          # Codex 入口，整併 init/spec/plan/implement/qa/verify/release
+│           └── references/
+│               ├── init.md
+│               ├── spec.md
+│               ├── plan.md
+│               ├── implement.md
+│               ├── qa.md
+│               ├── verify.md
+│               ├── release.md
+│               └── roles/
 ├── .claude/
 │   ├── settings.json            # 權限設定（auto-accept rules）
 │   ├── agents/
@@ -440,9 +500,21 @@ your-project/
 ├── .github/                      # /specflow:init 建立
 │   ├── ISSUE_TEMPLATE/
 │   └── PULL_REQUEST_TEMPLATE.md
+├── index.html                    # 文件入口 + Dashboard
 ├── CLAUDE.md
 └── README.md
 ```
+
+### 文件共存原則
+
+| 路徑 | 主要使用者 | 用途 |
+|------|-----------|------|
+| `README.md` | 所有人 | 專案總覽、安裝方式、文件導覽 |
+| `index.html` | 所有人 | 視覺化文件入口與 GitHub dashboard |
+| `CLAUDE.md` | Claude Code | Claude 在 repo 內的主要入口文件 |
+| `.claude/` | Claude Code | agents、skills、scripts、權限設定 |
+| `.codex/skills/specflow/` | Codex | Codex skill 與對應 phase / role references |
+| `specs/` | Claude + Codex + 人類 | 共同 source of truth |
 
 ---
 
