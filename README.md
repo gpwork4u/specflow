@@ -20,6 +20,27 @@
 
 ---
 
+## 目錄
+
+- [安裝](#安裝)
+  - [安裝 Claude 版文件](#安裝-claude-版文件)
+  - [安裝 Codex 版 skill](#安裝-codex-版-skill)
+  - [共存建議](#共存建議)
+- [前置需求](#前置需求)
+- [工作流程](#工作流程)
+- [Agent 角色](#agent-角色)
+- [Specification-Driven Development](#specification-driven-development)
+- [GitHub Issue 架構](#github-issue-架構)
+- [並行執行策略](#並行執行策略)
+- [指令](#指令)
+- [目錄結構](#目錄結構)
+  - [文件共存原則](#文件共存原則)
+- [引用與致謝](#引用與致謝)
+- [自訂與擴展](#自訂與擴展)
+- [授權](#授權)
+
+---
+
 ## 安裝
 
 ### 安裝 Claude 版文件
