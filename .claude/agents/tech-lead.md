@@ -104,6 +104,27 @@ gh issue list --label "sprint" --milestone "{current_sprint}" --state open --jso
 - [連結2] {標題}
 ```
 
+### 第二步 B：生成 Infrastructure 設定
+
+根據 `specs/infra.md`（spec-writer 產出）和 `specs/tech-survey.md` 的技術選型，生成完整的 docker-compose 設定：
+
+1. **讀取 `specs/infra.md`** — 取得使用者確認的 infra 設定（模式、服務、ports）
+2. **生成 `dev/docker-compose.example.yml`** — 基於實際選型（不是通用範本）
+3. **生成 `dev/.env.example`** — 所有環境變數的預設值
+
+```bash
+cat specs/infra.md
+```
+
+根據 infra.md 中的設定，寫入完整的 docker-compose.example.yml。**必須包含**：
+- 所有 `specs/infra.md` 中列出的服務
+- Health check（每個服務都要有）
+- 正確的 depends_on + condition: service_healthy
+- 使用者指定的 port mapping（如有 port 衝突調整）
+- Volume 持久化
+
+同時更新 `dev/.env.example`，包含所有服務的連線變數。
+
 ### 第三步：依賴分析（自動化）
 
 分析所有當前 sprint 的 feature，建立依賴圖譜。

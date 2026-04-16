@@ -357,12 +357,21 @@ gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | "[\(.path):\(
 ## Phase B：Sprint 完整測試（Engineer 全部完成後自動執行）
 
 每個 sprint 的 feature PR 全部合併後，QA 執行**完整測試流程**：
-docker compose up → bddgen → playwright test → 產出 report → docker compose down
+讀取 infra 設定 → docker compose up → bddgen → playwright test → 產出 report → docker compose down
 
-### B0. 環境準備
+### B0. 讀取 Infra 設定 + 環境準備
+
+**先讀取 `specs/infra.md` 取得正確的環境設定**：
 
 ```bash
 git checkout main && git pull
+
+# 讀取 infra 設定
+cat specs/infra.md
+
+# 從 infra.md 取得關鍵設定
+APP_PORT=$(grep -oP 'app.*\|\s*\K\d+' specs/infra.md | head -1 || echo "3000")
+HEALTH_ENDPOINT="http://localhost:${APP_PORT}/health"
 
 docker --version && docker compose version
 
@@ -390,9 +399,9 @@ TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 cd dev
 docker compose up -d --build
 
-echo "Waiting for services..."
+echo "Waiting for services at ${HEALTH_ENDPOINT}..."
 for i in $(seq 1 30); do
-  if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+  if curl -sf "${HEALTH_ENDPOINT}" > /dev/null 2>&1; then
     echo "✅ Services ready"
     break
   fi
@@ -421,7 +430,7 @@ cd ..
 cd test
 
 # 執行所有 BDD 測試
-BDD_RESULT=$(BASE_URL=http://localhost:3000 npx playwright test 2>&1) || true
+BDD_RESULT=$(BASE_URL=http://localhost:${APP_PORT} npx playwright test 2>&1) || true
 BDD_EXIT=$?
 
 # 從 Cucumber JSON report 提取結果
@@ -622,7 +631,7 @@ npx playwright show-trace test/test-results/{trace-file}.zip
 1. 啟動服務：\`cd dev && docker compose up -d --build\`
 2. 執行失敗場景：
 \`\`\`bash
-cd test && BASE_URL=http://localhost:3000 npx playwright test --grep "{scenario name}"
+cd test && BASE_URL=http://localhost:${APP_PORT} npx playwright test --grep "{scenario name}"
 \`\`\`
 3. 停止服務：\`cd dev && docker compose down\`
 
