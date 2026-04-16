@@ -14,9 +14,9 @@
 | **tech-lead** | 技術 survey + 開 issue 分配工作 | `specs/` | tech-survey.md + Feature/QA/Design issues | opus |
 | **ui-designer** | 建立可重用 UI component dataset | `design/` | Design tokens + 元件規格 + 範例 | opus |
 | **engineer** | 認領 feature / bug，寫程式 + unit test | `dev/` | PR（Closes #issue） | opus |
-| **qa-engineer** | 認領 QA issue，寫 e2e + browser test | `test/` | Test PR + Bug issues（附截圖） | opus |
+| **qa-engineer** | 認領 QA issue，撰寫 playwright-bdd step definitions | `test/` | Step Definitions PR + Bug issues（附截圖） | opus |
 | **code-review** | 審查 PR 品質、spec 一致性、安全性 | 唯讀 | PR Review（approve / request changes） | sonnet |
-| **verifier** | 三維度驗證 sprint 交付品質 | `specs/` | 驗證報告 | opus |
+| **verifier** | 三維度驗證（以 .feature + Cucumber report 為基準） | `specs/` | 驗證報告 | opus |
 
 ## 目錄分區
 
@@ -30,14 +30,17 @@ project/
 ├── dev/              ← 🔧 Engineer 專屬（程式碼 + unit tests）
 │   ├── src/
 │   └── __tests__/
-├── test/             ← 🧪 QA 專屬（e2e + browser tests）
-│   ├── e2e/
-│   ├── browser/
-│   └── screenshots/
-├── specs/            ← 📖 Spec + Tech Survey
+├── test/             ← 🧪 QA 專屬（playwright-bdd BDD tests）
+│   ├── features/          ← .feature 檔案（從 specs/ 複製）
+│   ├── steps/             ← Step definitions（Given/When/Then 實作）
+│   ├── support/           ← Hooks, fixtures, helpers
+│   ├── playwright.config.ts
+│   ├── screenshots/
+│   └── reports/
+├── specs/            ← 📖 Spec + Tech Survey + Gherkin 場景
 │   ├── overview.md
 │   ├── tech-survey.md
-│   ├── features/
+│   ├── features/          ← .md（API contract）+ .feature（Gherkin 場景）
 │   ├── dependencies.md
 │   ├── logs/              ← Sprint 工作日誌
 │   └── changes/
@@ -68,8 +71,8 @@ project/
   │              └─ APPROVED ↓
   │                 merge PR（需 1 approval + conversations resolved）
   │                       ▼
-  │                 Sprint 完整測試（自動觸發 via GitHub Actions）
-  │                 docker compose up → unit + API + browser → test report
+  │                 Sprint BDD 測試（自動觸發 via GitHub Actions）
+  │                 docker compose up → unit + playwright-bdd → test report
   │                       │
   │              ┌─ 失敗 → bug issue（附截圖）→ 修復 → 重測 ─┐
   │              └─ 通過 ↓                                   │
@@ -118,13 +121,18 @@ Epic #1（索引 + 需求）
 | `/specflow:verify` | 三維度驗證 sprint | 不需要（自動） |
 | `/specflow:release` | 部署 production | 確認部署 |
 
-## 自動測試
+## 自動測試（BDD 驅動）
+
+Spec-writer 產出 Gherkin `.feature` 檔案 → QA 撰寫 step definitions → playwright-bdd 將場景轉為 Playwright tests。
 
 當 sprint 的所有 feature/design PR merge 到 main 後，**GitHub Actions 自動執行**：
 1. docker compose up（從 example 建立）
-2. Unit tests → API E2E tests → Browser tests
-3. 產出 test report（commit 到 `test/reports/`）
-4. 結果自動回報到 QA issue 和 Sprint issue
+2. `npx bddgen` 生成 Playwright tests from .feature
+3. Unit tests → playwright-bdd BDD tests（API + UI）
+4. 產出 Cucumber JSON + HTML report（commit 到 `test/reports/`）
+5. 結果自動回報到 QA issue 和 Sprint issue
+
+**每個 sprint 結束時，.feature 檔案中的所有場景都必須通過 = 功能驗證完成。**
 
 不需要手動觸發。
 
@@ -132,6 +140,7 @@ Epic #1（索引 + 需求）
 
 - [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) — 本地部署 + CI 測試
 - [Playwright](https://playwright.dev/) — `npm install -D @playwright/test && npx playwright install`
+- [playwright-bdd](https://vitalets.github.io/playwright-bdd/) — `npm install -D playwright-bdd @cucumber/cucumber`
 
 ## 語言
 

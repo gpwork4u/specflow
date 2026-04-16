@@ -33,6 +33,7 @@ mkdir -p specs/features specs/changes specs/changes/archive
 
 spec-writer 產出：
 - `specs/` 目錄下的 spec 檔案（source of truth）
+- `specs/features/*.feature` — Gherkin 場景（可執行的接受標準）
 - Epic Issue + Sprint Issues
 - Sprint Milestones
 
@@ -93,15 +94,15 @@ Agent(subagent_type="code-review", run_in_background=true)
 - engineer 已有處理 review comments 的機制（見 engineer.md 第七步）
 - 所有 PR 通過 review 並合併後 → Phase 5
 
-### Phase 5：Sprint 完整測試（全部完成後自動）
+### Phase 5：Sprint BDD 測試（全部完成後自動）
 
-所有 engineer PR + QA test PR **通過 code review 並合併後**，QA 執行 sprint 完整測試：
+所有 engineer PR + QA step definitions PR **通過 code review 並合併後**，QA 執行 sprint 完整 BDD 測試：
 1. 用 `dev/docker-compose.yml` 啟動完整服務環境
-2. 對跑起來的服務執行 API e2e tests
-3. 對跑起來的服務執行 Playwright browser tests
+2. `npx bddgen` 從 .feature 生成 Playwright tests
+3. 執行 unit tests + playwright-bdd BDD tests（API + UI 場景）
 4. 停止服務
-5. 全部通過 → Phase 5.5
-6. 有失敗 → QA 建 bug issue（附截圖）→ engineer 修復 → 重測（最多 3 輪）
+5. 全部 .feature scenarios 通過 → Phase 5.5
+6. 有失敗 → QA 建 bug issue（附截圖 + 失敗 Gherkin 場景）→ engineer 修復 → 重測（最多 3 輪）
 
 ### Phase 5.5：三維度驗證（背景自動）
 
@@ -134,10 +135,9 @@ Verifier 檢查：
 📊 摘要：
 Features: X | PRs: X | Bugs fixed: X
 
-🧪 完整測試結果（docker compose 環境）：
+🧪 BDD 測試結果（docker compose 環境）：
   Unit Tests: X passed
-  API E2E Tests: X passed
-  Browser Tests: X passed (Playwright)
+  BDD Scenarios: X/Y passed (playwright-bdd)
 
 ✅ Verify: PASS（Completeness + Correctness + Coherence）
 

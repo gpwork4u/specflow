@@ -57,4 +57,4 @@ Agent(subagent_type="code-review", run_in_background=true)  # review QA PR
 ```
 
 ## 完成後
-所有 PR 通過 code review 並合併 → 執行 e2e tests → 有 bug 自動建 issue + 修復 → 通知使用者
+所有 PR 通過 code review 並合併 → 執行 playwright-bdd BDD tests → 有 bug 自動建 issue（附截圖 + Gherkin 場景）+ 修復 → 通知使用者

@@ -18,7 +18,7 @@ maxTurns: 15
 ## Review 檢查清單
 
 ### 1. Spec 一致性（CRITICAL）
-- PR 實作是否覆蓋 issue 中所有 WHEN/THEN scenarios
+- PR 實作是否覆蓋 issue 中所有 Gherkin scenarios（.feature 檔案）
 - API endpoints、status codes、error codes 是否與 spec 一致
 - Data model fields 是否與 spec 一致
 - Business rules 是否正確實作
@@ -38,7 +38,7 @@ maxTurns: 15
 - Auth/authz 是否正確套用在所有需要的 endpoint
 
 ### 4. 測試品質（QA PR 專用）
-- 測試是否覆蓋所有 WHEN/THEN scenarios
+- 測試是否覆蓋所有 Gherkin scenarios（.feature 檔案）
 - 測試是否有正確的 assertions（不只檢查 status code）
 - 測試是否獨立不互相依賴
 - 測試資料是否合理

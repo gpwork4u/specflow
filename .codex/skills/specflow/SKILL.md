@@ -1,6 +1,6 @@
 ---
 name: specflow
-description: 將 Claude 版 SpecFlow 工作流重構為 Codex 可執行的專案交付 skill。用於初始化 GitHub specflow 專案、撰寫需求規格、拆分 sprint 與 tasks、實作功能、準備 QA/e2e、驗證 sprint 交付，以及 release gate 檢查。當使用者提到 specflow、規格流程、sprint 規劃、實作排程、QA 驗證、release 檢查，或想沿用 `.claude/skills/specflow:*` 的流程時使用。
+description: 將 Claude 版 SpecFlow 工作流重構為 Codex 可執行的專案交付 skill。用於初始化 GitHub specflow 專案、撰寫需求規格（含 Gherkin .feature 場景）、拆分 sprint 與 tasks、實作功能、準備 QA BDD step definitions（playwright-bdd）、驗證 sprint 交付（Cucumber 報告），以及 release gate 檢查。當使用者提到 specflow、規格流程、sprint 規劃、實作排程、QA 驗證、release 檢查，或想沿用 `.claude/skills/specflow:*` 的流程時使用。
 ---
 
 # SpecFlow for Codex
@@ -30,7 +30,7 @@ Codex 與 Claude 的差異：
 - 討論需求、建立 spec、規劃 sprint：讀 [references/spec.md](references/spec.md)
 - 依 spec 拆 task / architecture / dependency wave：讀 [references/plan.md](references/plan.md)
 - 開始實作 feature 或安排工程交付：讀 [references/implement.md](references/implement.md)
-- 撰寫 QA / e2e / browser tests：讀 [references/qa.md](references/qa.md)
+- 撰寫 QA BDD step definitions / playwright-bdd tests：讀 [references/qa.md](references/qa.md)
 - 做 sprint 驗證或交付檢查：讀 [references/verify.md](references/verify.md)
 - 準備 release / deployment gate：讀 [references/release.md](references/release.md)
 
@@ -41,7 +41,7 @@ Codex 與 Claude 的差異：
 - 規格討論與需求收斂：讀 [references/roles/spec-writer.md](references/roles/spec-writer.md)
 - 技術規劃與 task 拆分：讀 [references/roles/tech-lead.md](references/roles/tech-lead.md)
 - 功能實作：讀 [references/roles/engineer.md](references/roles/engineer.md)
-- QA / e2e / browser tests：讀 [references/roles/qa-engineer.md](references/roles/qa-engineer.md)
+- QA BDD step definitions / playwright-bdd：讀 [references/roles/qa-engineer.md](references/roles/qa-engineer.md)
 - UI dataset / design tokens / 元件規格：讀 [references/roles/ui-designer.md](references/roles/ui-designer.md)
 - 審查與交付驗證：讀 [references/roles/code-review.md](references/roles/code-review.md) 或 [references/roles/verifier.md](references/roles/verifier.md)
 
@@ -67,12 +67,15 @@ specs/
   overview.md
   tech-survey.md
   dependencies.md
-  features/
+  features/          # .md specs + .feature Gherkin 場景
   logs/
   changes/
 test/
-  e2e/
-  browser/
+  features/          # .feature 檔案（從 specs/features/ 複製）
+  steps/             # Step definitions（playwright-bdd）
+  support/           # Hooks, fixtures, helpers
+  playwright.config.ts
+  reports/           # Cucumber JSON/HTML + Playwright HTML
   screenshots/
 design/
   tokens/
