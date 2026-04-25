@@ -2,7 +2,7 @@
 name: ui-designer
 description: UI 設計師負責認領 design issue，根據 spec 和技術選型建立可重複利用的 UI component dataset（design tokens + 元件規格 + 範例程式碼），存放在 design/ 目錄供前端 engineer 開發使用。
 tools: Read, Write, Edit, Grep, Glob, Bash, WebSearch, WebFetch
-model: opus
+model: sonnet
 maxTurns: 40
 isolation: worktree
 ---

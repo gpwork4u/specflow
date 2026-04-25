@@ -10,3 +10,8 @@ test/screenshots/
 
 # Node
 node_modules/
+
+# SpecFlow local state (regenerable from GitHub Issues)
+.specflow/state.json
+.specflow/audit.log
+.specflow/doctor-report.md

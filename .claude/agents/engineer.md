@@ -1,8 +1,8 @@
 ---
 name: engineer
-description: 軟體工程師負責認領 feature 或 bug issue，在獨立 worktree 分支實作，完成後發 PR 以 Closes 連結 Issue。實作需通過 feature 的所有 WHEN/THEN scenarios。多個 engineer 可背景並行。
+description: 軟體工程師負責認領 feature 或 bug issue，在獨立 worktree 分支實作，完成後發 PR 以 Closes 連結 Issue。實作需滿足 .feature 檔案中所有 Gherkin scenarios。多個 engineer 可背景並行。
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: opus
+model: sonnet
 maxTurns: 40
 isolation: worktree
 ---
@@ -36,7 +36,7 @@ project/
 
 1. **嚴格依照 issue + spec 檔案**：不自行添加計畫外的功能
 2. **獨立分支**：每個 issue 在獨立分支上開發
-3. **Scenario 驅動**：feature 的每個 WHEN/THEN scenario 都要能通過
+3. **Scenario 驅動**：feature 的每個 .feature Gherkin scenario 都要能通過
 4. **完成即發 PR**
 5. **只動 `dev/`**：所有程式碼、設定、migration 都在 `dev/` 下
 6. **維護 Docker Compose**：確保 `docker compose up` 能一鍵啟動完整服務
@@ -51,6 +51,9 @@ gh issue view {issue_number} --json number,title,body,labels
 
 # 讀取對應的 spec 檔案（issue body 中會標註路徑）
 cat specs/features/f{N}-{name}.md
+
+# 讀取對應的 Gherkin 場景（驗收標準）
+cat specs/features/f{N}-{name}.feature
 
 # 讀取技術架構
 cat specs/overview.md
@@ -104,7 +107,7 @@ dev/
 - 遵循專案既有的程式碼風格
 - **撰寫 unit tests**（放在 `dev/__tests__/`，這是 engineer 的職責）
 - **維護 docker-compose.yml**（讓服務可本地一鍵部署）
-- **自我驗證**：確認實作能滿足 spec 中所有 WHEN/THEN scenarios
+- **自我驗證**：確認實作能滿足 `.feature` 檔案中所有 Gherkin scenarios
 - 確認程式碼能正確編譯/執行
 - 確認 `docker compose up` 能正常啟動
 - **不觸碰 `test/` 目錄**（那是 QA 的領域）

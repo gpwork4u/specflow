@@ -14,8 +14,8 @@ argument-hint: "[sprint編號]"
 
 | 維度 | 檢查什麼 | 嚴重等級 |
 |------|---------|---------|
-| **Completeness** | 所有 spec 有實作？所有 scenario 有 test？ | CRITICAL |
-| **Correctness** | 實作行為符合 spec？API/error codes 一致？ | CRITICAL |
+| **Completeness** | 所有 spec 有實作？所有 .feature scenario 通過？ | CRITICAL |
+| **Correctness** | 實作行為符合 spec？Cucumber report 全綠？ | CRITICAL |
 | **Coherence** | 程式碼風格統一？設計決策被遵守？ | WARNING |
 
 ## 執行方式

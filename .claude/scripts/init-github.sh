@@ -46,6 +46,7 @@ create_label "in-progress"      "0075CA" "進行中"
 create_label "ready-for-review" "7057FF" "等待 Review"
 create_label "ready-for-qa"     "D876E3" "等待 QA 驗證"
 create_label "code-review"      "6F42C1" "Code Review"
+create_label "change"           "BFD4F2" "Change Request（既有專案新需求）"
 
 # ---- Issue Templates ----
 echo ""

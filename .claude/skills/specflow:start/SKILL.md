@@ -2,7 +2,7 @@
 name: specflow:start
 description: 啟動完整的 specflow 專案流程。使用者只需與 spec agent 對話確認需求和架構，之後 tech-lead → (engineer + qa 並行) → verify → release 全部自動背景執行。觸發關鍵字："start", "開始", "啟動專案", "新專案"。
 user-invocable: true
-allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent, AskUserQuestion
 argument-hint: "[專案主題]"
 ---
 
@@ -14,6 +14,14 @@ argument-hint: "[專案主題]"
 
 ## 完整流程
 
+### Phase 0：環境檢查（自動，缺工具會中斷流程）
+
+```bash
+bash .claude/scripts/doctor.sh
+```
+
+如果 exit code != 0：呼叫 `specflow:doctor` skill 用 `AskUserQuestion` 引導使用者安裝缺失工具，**不要繼續往下跑**。
+
 ### Phase 1：初始化（自動）
 
 ```bash
@@ -22,7 +30,11 @@ if [ "$LABEL_COUNT" -lt 7 ]; then
   bash .claude/scripts/init-github.sh
 fi
 mkdir -p specs/features specs/changes specs/changes/archive
+bash .claude/scripts/state.sh init
+bash .claude/scripts/state.sh phase "phase-1-init" "spec-writer 開始討論需求"
 ```
+
+> **State 紀錄原則**：每進入新 phase / 啟動 background agent / 收到 agent 回報時，呼叫 `state.sh phase` 或 `state.sh agent-add/done` 寫入 `.specflow/state.json`，讓 `/specflow:resume` 可以接續。
 
 ### Phase 2：Spec 討論（使用者參與）
 
@@ -33,6 +45,7 @@ mkdir -p specs/features specs/changes specs/changes/archive
 
 spec-writer 產出：
 - `specs/` 目錄下的 spec 檔案（source of truth）
+- `specs/features/*.feature` — Gherkin 場景（可執行的接受標準）
 - Epic Issue + Sprint Issues
 - Sprint Milestones
 
@@ -93,15 +106,94 @@ Agent(subagent_type="code-review", run_in_background=true)
 - engineer 已有處理 review comments 的機制（見 engineer.md 第七步）
 - 所有 PR 通過 review 並合併後 → Phase 5
 
-### Phase 5：Sprint 完整測試（全部完成後自動）
+### Phase 4.9：Infra 確認（Sprint 測試前，需使用者確認）
 
-所有 engineer PR + QA test PR **通過 code review 並合併後**，QA 執行 sprint 完整測試：
-1. 用 `dev/docker-compose.yml` 啟動完整服務環境
-2. 對跑起來的服務執行 API e2e tests
-3. 對跑起來的服務執行 Playwright browser tests
-4. 停止服務
-5. 全部通過 → Phase 5.5
-6. 有失敗 → QA 建 bug issue（附截圖）→ engineer 修復 → 重測（最多 3 輪）
+所有 PR 通過 code review 並合併後，**在執行測試前**向使用者確認 infra 狀態。
+使用 `AskUserQuestion` 提供一致的 UI 介面：
+
+```javascript
+// Step 1: 確認測試環境
+AskUserQuestion({
+  questions: [
+    {
+      question: "Sprint {N} 的 BDD 測試準備開始，測試環境怎麼處理？",
+      header: "Infra",
+      multiSelect: false,
+      options: [
+        {
+          label: "自動部署 (Recommended)",
+          description: "使用 docker compose up 自動啟動所有服務（根據 specs/infra.md 設定）",
+          preview: "cd dev\ncp docker-compose.example.yml docker-compose.yml\ncp .env.example .env\ndocker compose up -d --build\n\n# 等待 health check 通過後自動執行測試"
+        },
+        {
+          label: "服務已在運行",
+          description: "我的本機服務已經在跑了，直接執行測試就好"
+        },
+        {
+          label: "需要調整設定",
+          description: "port 或設定有衝突，我先處理完再開始"
+        }
+      ]
+    },
+    {
+      question: "App 的測試 URL 是？",
+      header: "URL",
+      multiSelect: false,
+      options: [
+        { label: "http://localhost:3000 (Recommended)", description: "Docker Compose 預設（見 specs/infra.md）" },
+        { label: "http://localhost:8000", description: "Python/FastAPI 預設" },
+        { label: "http://localhost:8080", description: "Go/Java 預設" }
+      ]
+    }
+  ]
+})
+```
+
+根據使用者回答：
+
+- **自動部署** → 執行 `cd dev && docker compose up -d --build`，等待 health check，自動進入 Phase 5
+- **服務已在運行** → 跳過 docker compose，直接用指定 URL 進入 Phase 5
+- **需要調整設定** → 暫停等待使用者處理完畢，再次確認後進入 Phase 5
+
+**如果使用者選了自訂 URL（Other）**，將 BASE_URL 傳入 QA agent。
+
+### Phase 5：Sprint BDD 測試（Infra 確認後自動執行）
+
+**直接呼叫共用 script**（與 CI 完全相同）：
+
+```bash
+# 自動部署模式
+BASE_URL={使用者確認的URL} bash .claude/scripts/run-sprint-tests.sh all
+
+# 服務已在跑模式
+SKIP_DOCKER=1 BASE_URL={使用者確認的URL} bash .claude/scripts/run-sprint-tests.sh all
+```
+
+Script 會：
+1. 啟動 docker（除非 SKIP_DOCKER=1）+ 等 health check
+2. Unit tests
+3. 同步 `specs/features/*.feature` → `test/features/`
+4. `npx bddgen` + `npx playwright test`
+5. **Coverage check**：實際跑的 scenarios 數量 = `specs/features/` 內 Scenario 總數，否則 fail（防止漏測）
+6. 自動 docker compose down
+
+任一階段失敗 → script exit 非 0 → QA 建 bug issue（附截圖：`test/screenshots/`、失敗報告：`test/reports/cucumber.json`）→ engineer 修復 → 重測（最多 3 輪）。
+
+**每輪重測前再次確認環境**：
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "Bug 已修復，要重新執行 BDD 測試嗎？",
+    header: "重測",
+    multiSelect: false,
+    options: [
+      { label: "重新測試 (Recommended)", description: "重新啟動服務並執行所有 BDD scenarios" },
+      { label: "只測失敗的", description: "只重跑上次失敗的 scenarios" },
+      { label: "暫停", description: "我需要先手動檢查，稍後再測" }
+    ]
+  }]
+})
+```
 
 ### Phase 5.5：三維度驗證（背景自動）
 
@@ -134,10 +226,9 @@ Verifier 檢查：
 📊 摘要：
 Features: X | PRs: X | Bugs fixed: X
 
-🧪 完整測試結果（docker compose 環境）：
+🧪 BDD 測試結果（docker compose 環境）：
   Unit Tests: X passed
-  API E2E Tests: X passed
-  Browser Tests: X passed (Playwright)
+  BDD Scenarios: X/Y passed (playwright-bdd)
 
 ✅ Verify: PASS（Completeness + Correctness + Coherence）
 
@@ -145,14 +236,38 @@ Features: X | PRs: X | Bugs fixed: X
 驗證報告：specs/verify-sprint-{N}.md
 ```
 
-### Phase 7：自動推進下一個 Sprint
+### Phase 7：推進下一個 Sprint（需使用者確認）
 
-如果有下一個 sprint milestone，**自動啟動** Phase 3（tech-lead）→ Phase 4（engineer + qa）→ ...
+如果有下一個 sprint milestone，向使用者確認後啟動：
 
-如果所有 sprint 都完成，通知使用者：
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "Sprint {N} 完成！要自動開始 Sprint {N+1} 嗎？",
+    header: "下一步",
+    multiSelect: false,
+    options: [
+      { label: "開始 Sprint {N+1} (Recommended)", description: "自動啟動 tech-lead → engineer + qa 流程" },
+      { label: "暫停", description: "我想先 review Sprint {N} 的成果，之後再開始" },
+      { label: "直接 Release", description: "目前功能已夠用，直接進入部署流程" }
+    ]
+  }]
+})
 ```
-🎉 所有 Sprint 完成！專案開發完畢。
-使用 /specflow:release 部署到 production。
+
+如果所有 sprint 都完成：
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "所有 Sprint 完成！下一步？",
+    header: "完成",
+    multiSelect: false,
+    options: [
+      { label: "部署 Production", description: "執行 /specflow:release 部署流程" },
+      { label: "先 Review", description: "我想先檢查完整專案再部署" }
+    ]
+  }]
+})
 ```
 
 ## 重要
@@ -163,3 +278,7 @@ Features: X | PRs: X | Bugs fixed: X
 - `specs/` 目錄是 source of truth，所有 agent 從這裡讀取規格
 - 依賴分析自動化，不需手動判斷 wave
 - 三維度驗證確保交付品質
+
+## Context 中斷時
+
+如果 context 滿了被 `/clear`，或關閉 session 後想接著做：執行 `/specflow:resume` 從 `.specflow/state.json` 重建狀態並繼續。**所有持久狀態都在 GitHub Issues + state.json，不在對話裡。**
