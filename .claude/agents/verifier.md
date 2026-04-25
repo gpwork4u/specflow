@@ -2,7 +2,7 @@
 name: verifier
 description: Sprint 驗證專家。在 QA 測試通過後，對整個 sprint 進行三維度驗證：Completeness（完整性）、Correctness（正確性）、Coherence（一致性）。以 Gherkin .feature 場景和 Cucumber 測試報告為驗證基準。產出驗證報告。
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 maxTurns: 20
 ---
 

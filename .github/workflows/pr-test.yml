@@ -1,0 +1,77 @@
+name: PR Test (per-feature subset)
+
+# 每次 PR 開啟或推新 commit 時，跑該 PR 涉及的 .feature 子集
+# 不取代 sprint-test.yml（後者在 merge 後跑全套），這層是 fail-fast
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pr-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Determine feature scope
+        id: scope
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body --jq .body)
+          # PR body 慣例會有 "Closes #N"，從 issue label/title 推出 feature ID
+          ISSUE_NUMS=$(echo "$PR_BODY" | grep -oE 'Closes #[0-9]+' | grep -oE '[0-9]+' | tr '\n' ' ')
+
+          # 找出本 PR 變動的 .feature 檔（如果有）
+          CHANGED_FEATURES=$(git diff --name-only origin/main...HEAD -- 'specs/features/*.feature' | tr '\n' ' ')
+
+          if [ -n "$CHANGED_FEATURES" ]; then
+            echo "scope=$CHANGED_FEATURES" >> "$GITHUB_OUTPUT"
+            echo "Running scenarios for changed features: $CHANGED_FEATURES"
+          else
+            # PR 沒改 .feature，但對應 issue 有 feature ID → 從 issue title 找
+            FEATURES=""
+            for n in $ISSUE_NUMS; do
+              TITLE=$(gh issue view "$n" --json title --jq .title 2>/dev/null || true)
+              FID=$(echo "$TITLE" | grep -oE 'F-[0-9]+' | head -1)
+              [ -n "$FID" ] && FEATURES="$FEATURES specs/features/${FID}*.feature"
+            done
+            if [ -n "$FEATURES" ]; then
+              echo "scope=$FEATURES" >> "$GITHUB_OUTPUT"
+              echo "Running scenarios for issues $ISSUE_NUMS: $FEATURES"
+            else
+              # 找不到對應 feature → 跑全套
+              echo "scope=all" >> "$GITHUB_OUTPUT"
+              echo "No specific feature mapped — running all scenarios"
+            fi
+          fi
+
+      - name: Prepare docker-compose
+        working-directory: dev
+        run: |
+          [ -f docker-compose.example.yml ] && cp docker-compose.example.yml docker-compose.yml
+          [ -f .env.example ] && cp .env.example .env
+
+      - name: Run tests
+        env:
+          BASE_URL: http://localhost:3000
+        run: bash .claude/scripts/run-sprint-tests.sh "${{ steps.scope.outputs.scope }}"
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ github.event.pull_request.number }}-test-report
+          path: |
+            test/reports/
+            test/screenshots/
+          if-no-files-found: ignore

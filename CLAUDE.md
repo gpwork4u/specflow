@@ -12,11 +12,13 @@
 |------|------|---------|------|-------|
 | **spec-writer** | 與使用者討論需求 | `specs/` | Epic + Sprint issues | opus |
 | **tech-lead** | 技術 survey + 開 issue 分配工作 | `specs/` | tech-survey.md + Feature/QA/Design issues | opus |
-| **ui-designer** | 建立可重用 UI component dataset | `design/` | Design tokens + 元件規格 + 範例 | opus |
-| **engineer** | 認領 feature / bug，寫程式 + unit test | `dev/` | PR（Closes #issue） | opus |
-| **qa-engineer** | 認領 QA issue，撰寫 playwright-bdd step definitions | `test/` | Step Definitions PR + Bug issues（附截圖） | opus |
+| **ui-designer** | 建立可重用 UI component dataset | `design/` | Design tokens + 元件規格 + 範例 | sonnet |
+| **engineer** | 認領 feature / bug，寫程式 + unit test | `dev/` | PR（Closes #issue） | sonnet |
+| **qa-engineer** | 認領 QA issue，撰寫 playwright-bdd step definitions | `test/` | Step Definitions PR + Bug issues（附截圖） | sonnet |
 | **code-review** | 審查 PR 品質、spec 一致性、安全性 | 唯讀 | PR Review（approve / request changes） | sonnet |
-| **verifier** | 三維度驗證（以 .feature + Cucumber report 為基準） | `specs/` | 驗證報告 | opus |
+| **verifier** | 三維度驗證（以 .feature + Cucumber report 為基準） | `specs/` | 驗證報告 | sonnet |
+
+> **Model 配置原則**：spec-writer 與 tech-lead 用 opus（前者要互動釐清需求、後者要做技術選型與架構決策，影響整個 sprint 的方向）；engineer 寫程式、qa 寫測試、ui-designer、verifier、code-review 用 sonnet（已有清楚 spec/scenario 可循的結構化工作）。整體 token 成本約節省 60-65%。
 
 ## 目錄分區
 
@@ -111,30 +113,48 @@ Epic #1（索引 + 需求）
 | `qa` | QA 測試（qa-engineer） |
 | `bug` | Bug（engineer） |
 | `code-review` | Code Review |
+| `change` | Change Request（既有專案新需求） |
 
 ## 指令
 
 | 指令 | 用途 | 使用者參與 |
 |------|------|-----------|
 | `/specflow:init` | 初始化 labels + templates | 首次一次 |
+| `/specflow:doctor` | 環境工具檢查 | 缺工具時引導安裝 |
 | `/specflow:start [主題]` | 啟動完整流程 | 對話確認 spec |
+| `/specflow:resume` | 從 .specflow/state.json 接續上次中斷處 | 不需要 |
+| `/specflow:change [描述]` | 已完成專案新增 Change Request | 對話確認影響範圍 |
 | `/specflow:verify` | 三維度驗證 sprint | 不需要（自動） |
 | `/specflow:release` | 部署 production | 確認部署 |
+
+## Resumability（context 中斷後接續）
+
+所有持久狀態都在兩個地方：
+- **GitHub Issues / Milestones / PRs**（source of truth）
+- **`.specflow/state.json`**（local cache，記錄當前 phase + in-flight agents）
+
+對話 context 不是狀態。被 `/clear` 或關掉 session 後，`/specflow:resume` 會從 state.json + GitHub 重建狀態繼續執行。
+
+## Change Request（已完成專案的新需求）
+
+Release 後若要新增/修改功能：
+- `/specflow:change [描述]` — spec-writer 評估影響、append 新 scenario 到既有 .feature（既有 scenario 自動變回歸測試）、建立新 sprint milestone，後續走標準流程
+- 既有 scenario 不刪，要 deprecate 用 `@deprecated` Gherkin tag 標記
 
 ## 自動測試（BDD 驅動）
 
 Spec-writer 產出 Gherkin `.feature` 檔案 → QA 撰寫 step definitions → playwright-bdd 將場景轉為 Playwright tests。
 
-當 sprint 的所有 feature/design PR merge 到 main 後，**GitHub Actions 自動執行**：
-1. docker compose up（從 example 建立）
-2. `npx bddgen` 生成 Playwright tests from .feature
-3. Unit tests → playwright-bdd BDD tests（API + UI）
-4. 產出 Cucumber JSON + HTML report（commit 到 `test/reports/`）
-5. 結果自動回報到 QA issue 和 Sprint issue
+**兩層 CI 測試**：
+1. `pr-test.yml` — PR 開啟/推 commit 時，跑該 PR 涉及的 feature 子集（fail-fast）
+2. `sprint-test.yml` — sprint 內所有 feature/design/bug issue 關閉後，跑完整 BDD（Coverage check 強制 = `specs/features/` 內所有 scenario 都被執行）
+
+**本機與 CI 共用同一份腳本** `.claude/scripts/run-sprint-tests.sh`：
+- 啟動 docker → unit tests → 同步 .feature → bddgen → playwright test → coverage check
+- 環境變數 `SKIP_DOCKER=1` 可跳過 docker（服務已在跑時用）
+- 任一階段失敗 exit 非 0，不再 `continue-on-error` 讓 PR 假性通過
 
 **每個 sprint 結束時，.feature 檔案中的所有場景都必須通過 = 功能驗證完成。**
-
-不需要手動觸發。
 
 ## 前置工具
 

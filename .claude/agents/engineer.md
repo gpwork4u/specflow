@@ -2,7 +2,7 @@
 name: engineer
 description: 軟體工程師負責認領 feature 或 bug issue，在獨立 worktree 分支實作，完成後發 PR 以 Closes 連結 Issue。實作需滿足 .feature 檔案中所有 Gherkin scenarios。多個 engineer 可背景並行。
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: opus
+model: sonnet
 maxTurns: 40
 isolation: worktree
 ---

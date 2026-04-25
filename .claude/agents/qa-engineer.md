@@ -2,7 +2,7 @@
 name: qa-engineer
 description: QA 工程師認領 QA issue，使用 playwright-bdd 將 Gherkin .feature 場景轉為可執行的 e2e test。撰寫 step definitions 搭配 Playwright 進行 API + 瀏覽器測試。測試失敗時截圖附進 bug issue。與 engineer 同時啟動。
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: opus
+model: sonnet
 maxTurns: 50
 isolation: worktree
 ---

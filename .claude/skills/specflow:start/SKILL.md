@@ -14,6 +14,14 @@ argument-hint: "[專案主題]"
 
 ## 完整流程
 
+### Phase 0：環境檢查（自動，缺工具會中斷流程）
+
+```bash
+bash .claude/scripts/doctor.sh
+```
+
+如果 exit code != 0：呼叫 `specflow:doctor` skill 用 `AskUserQuestion` 引導使用者安裝缺失工具，**不要繼續往下跑**。
+
 ### Phase 1：初始化（自動）
 
 ```bash
@@ -22,7 +30,11 @@ if [ "$LABEL_COUNT" -lt 7 ]; then
   bash .claude/scripts/init-github.sh
 fi
 mkdir -p specs/features specs/changes specs/changes/archive
+bash .claude/scripts/state.sh init
+bash .claude/scripts/state.sh phase "phase-1-init" "spec-writer 開始討論需求"
 ```
+
+> **State 紀錄原則**：每進入新 phase / 啟動 background agent / 收到 agent 回報時，呼叫 `state.sh phase` 或 `state.sh agent-add/done` 寫入 `.specflow/state.json`，讓 `/specflow:resume` 可以接續。
 
 ### Phase 2：Spec 討論（使用者參與）
 
@@ -147,14 +159,25 @@ AskUserQuestion({
 
 ### Phase 5：Sprint BDD 測試（Infra 確認後自動執行）
 
-QA 執行 sprint 完整 BDD 測試（使用 Phase 4.9 確認的環境）：
-1. 如需要，用 `dev/docker-compose.yml` 啟動服務
-2. 確認 health check 通過
-3. `npx bddgen` 從 .feature 生成 Playwright tests
-4. `BASE_URL={使用者確認的 URL} npx playwright test`
-5. 停止服務（如果是自動部署的）
-6. 全部 .feature scenarios 通過 → Phase 5.5
-7. 有失敗 → QA 建 bug issue（附截圖 + 失敗 Gherkin 場景）→ engineer 修復 → 重測（最多 3 輪）
+**直接呼叫共用 script**（與 CI 完全相同）：
+
+```bash
+# 自動部署模式
+BASE_URL={使用者確認的URL} bash .claude/scripts/run-sprint-tests.sh all
+
+# 服務已在跑模式
+SKIP_DOCKER=1 BASE_URL={使用者確認的URL} bash .claude/scripts/run-sprint-tests.sh all
+```
+
+Script 會：
+1. 啟動 docker（除非 SKIP_DOCKER=1）+ 等 health check
+2. Unit tests
+3. 同步 `specs/features/*.feature` → `test/features/`
+4. `npx bddgen` + `npx playwright test`
+5. **Coverage check**：實際跑的 scenarios 數量 = `specs/features/` 內 Scenario 總數，否則 fail（防止漏測）
+6. 自動 docker compose down
+
+任一階段失敗 → script exit 非 0 → QA 建 bug issue（附截圖：`test/screenshots/`、失敗報告：`test/reports/cucumber.json`）→ engineer 修復 → 重測（最多 3 輪）。
 
 **每輪重測前再次確認環境**：
 ```javascript
@@ -255,3 +278,7 @@ AskUserQuestion({
 - `specs/` 目錄是 source of truth，所有 agent 從這裡讀取規格
 - 依賴分析自動化，不需手動判斷 wave
 - 三維度驗證確保交付品質
+
+## Context 中斷時
+
+如果 context 滿了被 `/clear`，或關閉 session 後想接著做：執行 `/specflow:resume` 從 `.specflow/state.json` 重建狀態並繼續。**所有持久狀態都在 GitHub Issues + state.json，不在對話裡。**
