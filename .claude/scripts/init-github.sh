@@ -47,6 +47,9 @@ create_label "ready-for-review" "7057FF" "等待 Review"
 create_label "ready-for-qa"     "D876E3" "等待 QA 驗證"
 create_label "code-review"      "6F42C1" "Code Review"
 create_label "change"           "BFD4F2" "Change Request（既有專案新需求）"
+create_label "backend"          "5319E7" "後端 feature（backend engineer 認領）"
+create_label "frontend"         "FBCA04" "前端 feature（frontend engineer 認領）"
+create_label "pipeline"         "0E8A16" "CI/CD/infra/docker（pipeline engineer 認領）"
 
 # ---- Issue Templates ----
 echo ""

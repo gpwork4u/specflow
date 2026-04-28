@@ -167,10 +167,20 @@ F-004 (Product Model)  ── 無依賴
 
 ### 第四步：建立 Feature Issues（給 Engineer）
 
+**Lane 分類（必填）**：建立 feature issue 時，**除了 `feature` label 之外，還必須加上以下三個 lane label 之一**：
+
+| Lane | 適用 | 範例 |
+|------|------|------|
+| `backend` | API、business logic、DB、auth、background job | F-001 User Model + Auth API |
+| `frontend` | UI 元件、頁面、互動、串接 API | F-002 Login Page |
+| `pipeline` | Dockerfile、docker-compose、CI/CD、部署、infra script | F-005 Production Docker setup |
+
+純後端不加 frontend，純前端不加 backend。**若一個 feature 同時含後端 + 前端**，要拆成兩個 issue（F-001a backend、F-001b frontend），分屬不同 lane 才能讓兩位 engineer 並行。
+
 ```bash
 gh issue create \
   --title "📝 [Feature] F-{編號}: {功能名稱}" \
-  --label "feature" \
+  --label "feature,{backend|frontend|pipeline}" \
   --milestone "{current_sprint}" \
   --body "$(cat <<'BODY'
 ## 功能描述

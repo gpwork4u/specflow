@@ -13,7 +13,7 @@
 | **spec-writer** | 與使用者討論需求 | `specs/` | Epic + Sprint issues | opus |
 | **tech-lead** | 技術 survey + 開 issue 分配工作 | `specs/` | tech-survey.md + Feature/QA/Design issues | opus |
 | **ui-designer** | 建立可重用 UI component dataset | `design/` | Design tokens + 元件規格 + 範例 | sonnet |
-| **engineer** | 認領 feature / bug，寫程式 + unit test | `dev/` | PR（Closes #issue） | sonnet |
+| **engineer** | 認領 feature / bug，寫程式 + unit test（分 backend / frontend / pipeline 三個 lane，每 lane 1 個）| `dev/` | PR（Closes #issue） | sonnet |
 | **qa-engineer** | 認領 QA issue，撰寫 playwright-bdd step definitions | `test/` | Step Definitions PR + Bug issues（附截圖） | sonnet |
 | **code-review** | 審查 PR 品質、spec 一致性、安全性 | 唯讀 | PR Review（approve / request changes） | sonnet |
 | **verifier** | 三維度驗證（以 .feature + Cucumber report 為基準） | `specs/` | 驗證報告 | sonnet |
@@ -114,6 +114,9 @@ Epic #1（索引 + 需求）
 | `bug` | Bug（engineer） |
 | `code-review` | Code Review |
 | `change` | Change Request（既有專案新需求） |
+| `backend` | Backend lane（與 feature/bug 並用） |
+| `frontend` | Frontend lane（與 feature/bug 並用） |
+| `pipeline` | Pipeline / DevOps lane（與 feature/bug 並用） |
 
 ## 指令
 
@@ -126,6 +129,27 @@ Epic #1（索引 + 需求）
 | `/specflow:change [描述]` | 已完成專案新增 Change Request | 對話確認影響範圍 |
 | `/specflow:verify` | 三維度驗證 sprint | 不需要（自動） |
 | `/specflow:release` | 部署 production | 確認部署 |
+
+## Lane 制（同類型 agent 同時最多 1 個）
+
+每個 sprint 同時最多 5 個 background agent 在跑：
+
+| Lane | Agent | 同時數 | Issue label |
+|------|-------|--------|-------------|
+| backend | engineer | 1 | `feature,backend` 或 `bug,backend` |
+| frontend | engineer | 1 | `feature,frontend` 或 `bug,frontend` |
+| pipeline | engineer | 1 | `feature,pipeline` 或 `bug,pipeline` |
+| qa | qa-engineer | 1 | `qa` |
+| ui | ui-designer | 1 | `design` |
+
+每個 agent 在自己 lane 內 loop：認領未 assigned 的 issue → 實作 → PR → 認領下一個直到 lane 清空。
+
+**為什麼 lane 制**：
+- 避免多個同類 agent 在同一 worktree / 同一目錄改檔的 race condition
+- 控制 token 消耗（同類 issue 共用 context cache）
+- 簡化 merge 順序（同 lane 循序，不同 lane 並行）
+
+**Tech-lead 必須給每個 feature/bug issue 標 lane**（backend / frontend / pipeline 三選一）。混合性質的 feature 拆成兩個 issue 分屬不同 lane。
 
 ## Resumability（context 中斷後接續）
 

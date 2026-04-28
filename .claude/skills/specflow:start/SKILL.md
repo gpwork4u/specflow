@@ -62,27 +62,45 @@ tech-lead：
 4. 建立 QA issue（含 scenarios 清單）
 5. 建立 design issue（含 UI 元件清單，如 sprint 有 UI 功能）
 
-### Phase 4：Engineer + QA + UI Designer 同時啟動（背景並行）
+### Phase 4：每個 lane 啟動 1 個 agent（背景並行，lane 內循序）
 
-tech-lead 完成後，根據 `specs/dependencies.md` 的 wave 分組：
+**Lane 制度**：每種類型的 agent **同時只跑一個**，避免 worktree 衝突、token 浪費、merge race condition。每個 agent 在自己 lane 內 loop 認領未完成的 issue。
 
-#### Wave 0（先行，同時啟動）
+| Lane | Agent | 認領條件 |
+|------|-------|---------|
+| backend | engineer | label `feature,backend` 或 `bug,backend`，未 assigned |
+| frontend | engineer | label `feature,frontend` 或 `bug,frontend`，未 assigned |
+| pipeline | engineer | label `feature,pipeline` 或 `bug,pipeline`，未 assigned |
+| qa | qa-engineer | label `qa`，當前 sprint |
+| ui | ui-designer | label `design`，當前 sprint |
+
+#### 啟動策略
+
+先檢查當前 sprint 各 lane 是否有 issue，**只啟動有工作的 lane**：
+
+```bash
+SPRINT="{current_sprint_milestone}"
+for LANE in backend frontend pipeline; do
+  COUNT=$(gh issue list --milestone "$SPRINT" --label "$LANE" --state open --json number --jq 'length')
+  if [ "$COUNT" -gt 0 ]; then
+    echo "啟動 engineer lane=$LANE（$COUNT 個 issue 待認領）"
+    bash .claude/scripts/state.sh agent-add "engineer-$LANE" 0 null "" "running"
+    # Agent(subagent_type="engineer", run_in_background=true, isolation="worktree",
+    #       prompt="lane=$LANE, sprint=$SPRINT")
+  fi
+done
+
+# QA 與 UI 各最多 1 個
+Agent(subagent_type="qa-engineer", run_in_background=true, isolation="worktree",
+      prompt="sprint=$SPRINT")
+
+if [ "$(gh issue list --milestone "$SPRINT" --label "design" --state open --json number --jq 'length')" -gt 0 ]; then
+  Agent(subagent_type="ui-designer", run_in_background=true, isolation="worktree",
+        prompt="sprint=$SPRINT")
+fi
 ```
-# UI Designer — 建立 component dataset
-Agent(subagent_type="ui-designer", run_in_background=true, isolation="worktree")
 
-# QA — 撰寫 test scripts
-Agent(subagent_type="qa-engineer", run_in_background=true, isolation="worktree")
-
-# Engineer（無 UI 依賴的 feature）
-Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
-```
-
-#### Wave 1（Wave 0 完成後）
-```
-# Engineer（需要 UI 元件的 feature，等 ui-designer 完成）
-Agent(subagent_type="engineer", run_in_background=true, isolation="worktree")
-```
+**最多 5 個 background agent 同時跑**（backend / frontend / pipeline / qa / ui-designer），各自循序處理 lane 內所有 issue。
 
 ### Phase 4.5：Code Review（每個 PR 完成後自動觸發）
 
