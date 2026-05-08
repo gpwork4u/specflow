@@ -1,0 +1,169 @@
+name: Sprint E2E Test
+
+# 觸發條件：milestone 內 feature / design / qa / bug 四個 lane 全關 → 才跑 e2e
+# Sprint 收斂頻率低（每個 sprint 結束 1 次），不會佔太多 CI 分鐘。
+#
+# 為什麼放 CI：
+#   - 可重現（標準 ubuntu env，不受個別開發機影響）
+#   - 結果可見（不用本機重跑就看得到）
+#   - artifacts 集中存（trace / 截圖在 actions run 裡）
+#   - verifier 直接讀 workflow conclusion，不用靠 state.json
+#
+# 失敗時：自動建 bug issue（從 playwright report 抽失敗 test，從 file path 推 lane）
+#         engineer lane 重啟修復 → 關 bug → 再次觸發此 workflow
+
+on:
+  issues:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: 'Sprint milestone title (e.g., "Sprint 1")'
+        required: false
+
+jobs:
+  check-sprint:
+    runs-on: ubuntu-latest
+    outputs:
+      sprint-ready: ${{ steps.check.outputs.ready }}
+      sprint-name: ${{ steps.check.outputs.sprint_name }}
+      sprint-num: ${{ steps.check.outputs.sprint_num }}
+      qa-issue: ${{ steps.check.outputs.qa_issue }}
+      sprint-issue: ${{ steps.check.outputs.sprint_issue }}
+    steps:
+      - name: Check if all 4 lanes are closed
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+
+          if [ -n "${{ github.event.inputs.milestone }}" ]; then
+            MILESTONE_TITLE="${{ github.event.inputs.milestone }}"
+          else
+            MILESTONE=$(gh api "repos/$REPO/milestones?state=open&sort=title&direction=asc" \
+              --jq '[.[] | select(.title | startswith("Sprint"))][0]')
+            if [ -z "$MILESTONE" ] || [ "$MILESTONE" = "null" ]; then
+              echo "ready=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            MILESTONE_TITLE=$(echo "$MILESTONE" | jq -r '.title')
+          fi
+          echo "sprint_name=$MILESTONE_TITLE" >> "$GITHUB_OUTPUT"
+          SPRINT_NUM=$(echo "$MILESTONE_TITLE" | grep -oE '[0-9]+' | head -1)
+          echo "sprint_num=$SPRINT_NUM" >> "$GITHUB_OUTPUT"
+
+          OPEN_FEATURE=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" --label "feature" --state open --json number --jq 'length')
+          OPEN_DESIGN=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" --label "design" --state open --json number --jq 'length')
+          OPEN_QA=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" --label "qa" --state open --json number --jq 'length')
+          OPEN_BUGS=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" --label "bug" --state open --json number --jq 'length')
+
+          QA_ISSUE=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" --label "qa" --json number --jq '.[0].number // empty')
+          SPRINT_ISSUE=$(gh issue list --repo "$REPO" --milestone "$MILESTONE_TITLE" --label "sprint" --json number --jq '.[0].number // empty')
+          echo "qa_issue=$QA_ISSUE" >> "$GITHUB_OUTPUT"
+          echo "sprint_issue=$SPRINT_ISSUE" >> "$GITHUB_OUTPUT"
+
+          if [ "$OPEN_FEATURE" = "0" ] && [ "$OPEN_DESIGN" = "0" ] && [ "$OPEN_QA" = "0" ] && [ "$OPEN_BUGS" = "0" ]; then
+            echo "✅ All 4 lanes closed for $MILESTONE_TITLE — triggering e2e"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not yet (feature=$OPEN_FEATURE design=$OPEN_DESIGN qa=$OPEN_QA bug=$OPEN_BUGS)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e:
+    needs: check-sprint
+    if: needs.check-sprint.outputs.sprint-ready == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SPRINT: ${{ needs.check-sprint.outputs.sprint-name }}
+      SPRINT_NUM: ${{ needs.check-sprint.outputs.sprint-num }}
+      QA_ISSUE: ${{ needs.check-sprint.outputs.qa-issue }}
+      SPRINT_ISSUE: ${{ needs.check-sprint.outputs.sprint-issue }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run sprint e2e tests
+        id: tests
+        env:
+          BASE_URL: http://localhost:3000
+        run: bash .claude/scripts/run-sprint-tests.sh all
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint-${{ env.SPRINT_NUM }}-e2e-report
+          path: |
+            test/reports/
+            test/screenshots/
+            test/test-results/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Post result to sprint issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          OUTCOME="${{ steps.tests.outcome }}"
+          VERDICT=$([ "$OUTCOME" = "success" ] && echo "✅ ALL E2E PASSED" || echo "❌ E2E FAILED")
+
+          if [ -n "$SPRINT_ISSUE" ]; then
+            gh issue comment "$SPRINT_ISSUE" --repo "${{ github.repository }}" \
+              --body "🤖 Sprint e2e test: $VERDICT — [CI Run]($RUN_URL)"
+          fi
+          if [ -n "$QA_ISSUE" ]; then
+            gh issue comment "$QA_ISSUE" --repo "${{ github.repository }}" \
+              --body "📊 Sprint e2e: $VERDICT — [CI Run]($RUN_URL)"
+          fi
+
+      - name: Auto-create bug on failure
+        if: steps.tests.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          REPO="${{ github.repository }}"
+          REPORT="test/reports/playwright.json"
+
+          FAILED="(無 playwright.json 或無法解析)"
+          if [ -f "$REPORT" ]; then
+            FAILED=$(jq -r '
+              [.suites[]?.specs[]? | select(.tests[]?.results[]?.status == "failed")
+                | "- \(.title) (\(.file))"]
+              | join("\n")
+            ' "$REPORT" 2>/dev/null || echo "(無法解析)")
+          fi
+
+          # 從失敗的 .spec.ts 路徑推 lane（沒明確線索預設 backend）
+          # frontend 線索：spec 用到 page.locator / getBy
+          LANE="backend"
+          if [ -f "$REPORT" ]; then
+            if jq -e '.suites[]?.specs[]?.tests[]?.results[]?.errors[]?.message // ""' "$REPORT" 2>/dev/null \
+                | grep -qiE 'locator|getByRole|getByText|page\.'; then
+              LANE="frontend"
+            fi
+          fi
+
+          BODY=$(printf '## Sprint e2e 測試失敗\n\n**CI Run**: [View](%s)\n**Trigger**: issue #%s closed\n\n### 失敗的 Test\n%s\n\n### Artifacts\n見 workflow run 的 `sprint-%s-e2e-report` artifact（含 playwright.json + 截圖 + trace）。\n\n### 修復流程\n1. Engineer 認領此 bug → 修 → 發 PR → CI build-and-lint 過 → auto-merge\n2. 關此 bug issue → 自動再次觸發此 workflow → 重跑 e2e\n3. e2e 全綠後 verifier 接手三維度驗證' \
+            "$RUN_URL" "${{ github.event.issue.number }}" "$FAILED" "$SPRINT_NUM")
+
+          gh issue create --repo "$REPO" \
+            --title "🐛 [Bug] $SPRINT e2e failed (auto)" \
+            --label "bug,$LANE" \
+            --milestone "$SPRINT" \
+            --body "$BODY"
+
+      - name: Fail if tests failed
+        if: steps.tests.outcome != 'success'
+        run: exit 1

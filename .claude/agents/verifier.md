@@ -12,37 +12,32 @@ maxTurns: 20
 
 ## 🚦 前置條件（先做，沒過直接 short-circuit）
 
-驗證前必須先確認本地 e2e 已跑過且全綠。e2e **不在 CI 上跑**（CI 只做 build + lint），所以唯一可信的訊號是 `state.json.sprint_test_outcome`，由 orchestrator 在 Phase 5 跑完 `local-checks.sh e2e` 後寫入。
+驗證前必須先確認最近一次「Sprint E2E Test」workflow 為 success。e2e 在 GitHub Actions 上跑，唯一可信的訊號是 workflow conclusion。
 
 ```bash
-OUTCOME=$(bash .claude/scripts/state.sh get sprint_test_outcome)
+LATEST=$(gh run list --workflow "Sprint E2E Test" --limit 1 --json conclusion,databaseId --jq '.[0]')
+CONCLUSION=$(echo "$LATEST" | jq -r '.conclusion')
+RUN_ID=$(echo "$LATEST" | jq -r '.databaseId')
 
-if [ "$OUTCOME" != "success" ]; then
-  echo "🔴 sprint_test_outcome=${OUTCOME:-null} — 修 e2e 再來"
-  gh issue comment {sprint_issue} --body "🔴 verifier 短路：本地 e2e 未通過或未執行（state.sprint_test_outcome=${OUTCOME:-null}）。
-
-請執行：
-\`\`\`
-SPRINT='Sprint {N}' bash .claude/scripts/local-checks.sh e2e
-\`\`\`
-全綠後再跑 \`/specflow:verify\`。"
+if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+  echo "🔴 找不到 Sprint E2E Test workflow run — 先讓 4 lane 全關觸發 e2e workflow"
+  gh issue comment {sprint_issue} --body "🔴 verifier 短路：Sprint E2E workflow 從未跑過。請確認所有 feature/design/qa/bug issue 都已關閉。"
   exit 0
 fi
 
-# 額外校驗：playwright.json 存在且最後一次 run 全部 passed
-REPORT="test/reports/playwright.json"
-if [ ! -f "$REPORT" ]; then
-  echo "🔴 找不到 $REPORT — 本地 e2e 沒跑或被清掉"
+if [ "$CONCLUSION" != "success" ]; then
+  RUN_URL="https://github.com/{owner}/{repo}/actions/runs/$RUN_ID"
+  echo "🔴 最近一次 Sprint E2E Test 結果：$CONCLUSION — 修 e2e 再來"
+  gh issue comment {sprint_issue} --body "🔴 verifier 短路：最近一次 Sprint E2E Test 為 $CONCLUSION（[CI Run]($RUN_URL)）。修完後此 workflow 會自動再次觸發，待綠燈再跑 \`/specflow:verify\`。"
+  bash .claude/scripts/state.sh set sprint_test_outcome "\"$CONCLUSION\""
   exit 0
 fi
 
-FAILED=$(jq '.stats.unexpected // 0' "$REPORT" 2>/dev/null || echo "?")
-if [ "$FAILED" != "0" ]; then
-  echo "🔴 playwright report 顯示 $FAILED 個失敗 test — state 與 report 不一致"
-  exit 0
-fi
+bash .claude/scripts/state.sh set sprint_test_outcome '"success"'
+echo "✅ Sprint E2E Test 全綠（workflow run $RUN_ID）— 開始三維度驗證"
 
-echo "✅ Sprint e2e 全綠（state + report 一致）— 開始三維度驗證"
+# 可選：下載 artifact 給後續 archive 用
+gh run download "$RUN_ID" --name "sprint-${SPRINT_NUM}-e2e-report" --dir test/reports 2>/dev/null || true
 ```
 
 **沒通過前置條件就直接結束，不要進入下面的三維度檢查。** 三維度驗證只在 e2e 全綠時才有意義。

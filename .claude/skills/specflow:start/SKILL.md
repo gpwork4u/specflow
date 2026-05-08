@@ -212,9 +212,9 @@ AskUserQuestion({
 
 **如果使用者選了自訂 URL（Other）**，將 BASE_URL 傳入 QA agent。
 
-### Phase 5：Sprint e2e 測試（本地執行，orchestrator 跑）
+### Phase 5：Sprint e2e 測試（CI 自動跑，orchestrator 等結果）
 
-**e2e 不在 CI 上跑** — playwright + docker compose 在 GitHub Actions 上慢、易超時、port 衝突；改在 orchestrator 的本地環境跑（使用者的機器或 self-hosted runner）。
+**e2e 在 CI 上跑** — 4 lane 全關後 `.github/workflows/sprint-test.yml` 自動觸發。orchestrator 此 phase 只需輪詢 workflow 結果。
 
 ```bash
 SPRINT="{current_sprint}"
@@ -230,84 +230,41 @@ for LABEL in feature design qa bug; do
   fi
 done
 
-# 2. 確認本機 docker / node 已就緒（doctor.sh 已在 phase 0 跑過，這裡只做最終確認）
-docker compose version >/dev/null 2>&1 || { echo "🔴 docker compose 不在，無法跑 e2e"; exit 1; }
+# 2. Workflow 已被最後一個 issue close 自動觸發了；orchestrator 輪詢結果
+echo "4 lane 全關，等 Sprint E2E Test workflow..."
+for i in $(seq 1 80); do  # 最多等 40 分鐘（每次 30s）
+  RUN=$(gh run list --workflow "Sprint E2E Test" --limit 1 \
+    --json conclusion,status,databaseId --jq '.[0]')
+  STATUS=$(echo "$RUN" | jq -r '.status')
+  CONCLUSION=$(echo "$RUN" | jq -r '.conclusion')
+  RUN_ID=$(echo "$RUN" | jq -r '.databaseId')
+  [ "$STATUS" = "completed" ] && break
+  echo "[$i] workflow status: $STATUS"
+  sleep 30
+done
 
-# 3. 跑 e2e（從 specs/sprints/sprint-N.md 取 scope）
-BASE_URL="${BASE_URL:-http://localhost:3000}" \
-  bash .claude/scripts/run-sprint-tests.sh all
-OUTCOME=$?
-
-# 4. 寫結果到 state.json，e2e 過 → 進 sprint review；e2e 失敗 → 建 bug 重啟 lane
-if [ "$OUTCOME" = "0" ]; then
+# 3. 寫結果到 state.json
+if [ "$CONCLUSION" = "success" ]; then
   bash .claude/scripts/state.sh set sprint_test_outcome '"success"'
   bash .claude/scripts/state.sh phase "phase-5.5-review" "啟動 sprint code review"
 else
-  bash .claude/scripts/state.sh set sprint_test_outcome '"failure"'
-  bash .claude/scripts/state.sh phase "phase-5-e2e" "e2e 失敗，建 bug issue"
+  bash .claude/scripts/state.sh set sprint_test_outcome "\"$CONCLUSION\""
+  bash .claude/scripts/state.sh phase "phase-5-e2e" "e2e workflow 未通過"
+  # workflow 已自動建 bug issue + lane 重新打開（見 sprint-test.yml）
+  # orchestrator 不用做事，等 engineer 修完 bug 關掉 → workflow 自動再次觸發 → 回到此 phase 輪詢
 fi
 ```
 
-#### 失敗處理（orchestrator 自動建 bug + 重啟 lane）
+- `success` → 進入 Phase 5.5 sprint code review → Phase 5.6 verifier
+- `failure` → workflow 已自動建 bug issue（lane label 從失敗推測）→ engineer lane 重啟修復 → bug close 自動觸發新 workflow run → orchestrator 重新進入 Phase 5 輪詢
 
-```bash
-if [ "$OUTCOME" != "0" ]; then
-  # 從 playwright JSON 抽失敗 test
-  FAILED=$(jq -r '
-    [.suites[]?.specs[]? | select(.tests[]?.results[]?.status == "failed")
-      | {title, file}]
-    | map("- \(.title) (\(.file))") | join("\n")
-  ' test/reports/playwright.json 2>/dev/null || echo "(無法解析 report)")
+#### 為什麼 e2e 上 CI
 
-  # 從失敗檔案路徑推 lane（test/e2e/fNNN- 對應的 feature lane 由 sprint plan 決定）
-  # 簡化：預設 backend；frontend 可從 playwright trace 的 page interaction 判斷
-  LANE="backend"
-  echo "$FAILED" | grep -qiE 'page\.|locator|getBy' && LANE="frontend"
-
-  gh issue create \
-    --title "🐛 [Bug] Sprint $SPRINT e2e failed" \
-    --label "bug,$LANE" \
-    --milestone "$SPRINT" \
-    --body "本地 e2e 測試失敗
-
-### 失敗的 Test
-$FAILED
-
-### 報告
-\`test/reports/playwright.json\` + \`test/screenshots/\`
-
-### 修復流程
-Engineer 修完 PR merge → 關此 bug → orchestrator 自動回到 Phase 5 重跑 e2e"
-fi
-```
-
-- `success` → 進入 Phase 5.5 verifier
-- `failure` → 自動建 bug issue（4 lane 重新打破平衡） → engineer lane 重啟 → drain → 回到 Phase 5 重跑 e2e
-
-#### 為什麼 e2e 不上 CI
-
-1. **本地 docker compose 比 CI 快** — image cache、不用每次 cold-pull
-2. **port 衝突風險** — CI 上 Playwright + docker compose 容易 race
-3. **可重現** — 出錯時使用者機器上直接 `npx playwright show-trace` 看 trace
-4. **省 CI 分鐘** — sprint 收斂頻率不高（每次 sprint 結束 1 次），不需要每次 PR 都跑
-
-CI 只負責**輕量 gate**（unit / lint / contract-check），重量級 e2e 留在本地。
-
-**每輪重測前再次確認環境**：
-```javascript
-AskUserQuestion({
-  questions: [{
-    question: "Bug 已修復，要重新執行 e2e 測試嗎？",
-    header: "重測",
-    multiSelect: false,
-    options: [
-      { label: "重新測試 (Recommended)", description: "重新啟動服務並執行所有 e2e tests" },
-      { label: "只測失敗的", description: "只重跑上次失敗的 scenarios" },
-      { label: "暫停", description: "我需要先手動檢查，稍後再測" }
-    ]
-  }]
-})
-```
+1. **可重現**：標準 ubuntu env，不受個別開發機影響
+2. **可見性**：team / 使用者直接看 actions tab，不用本機重跑
+3. **Artifacts 集中**：playwright trace / 截圖 / report 在 actions run 裡，30 天保留
+4. **Verifier 信任源**：直接讀 workflow conclusion，不用靠 state.json 自我宣告
+5. **解放本機**：orchestrator 不用佔用 docker port，可以同時做別的事
 
 ### Phase 5.5：Sprint Code Review（背景自動，一次性全面審查）
 

@@ -189,17 +189,21 @@ Release 後若要新增/修改功能：
 
 Spec-writer 在 `specs/features/*.md` 寫 acceptance criteria 條列 → QA 把每條 AC 轉成一個 Playwright `test()` 寫在 `test/e2e/fNNN-*.spec.ts`。
 
-**所有 test 都在本地跑，CI 只做 build + lint。**
+**Unit / contract 在本地（push 前），e2e 在 CI（sprint 收斂時）。**
 
-### CI（GitHub Actions）只負責
+### CI（GitHub Actions）兩個 workflow
 
-`pr-test.yml` 唯一 job 是 **build-and-lint**：
-- `dev/` 能 `tsc --noEmit` / `npm run build` / `go build ./...` 過
-- `test/` 能 `tsc --noEmit` 過（e2e .spec.ts 也是 TS）
-- linter 沒紅
-- **不跑** unit tests / contract-check / e2e
+1. **`pr-test.yml` — build-and-lint**（每個 PR）
+   - `dev/` 能 `tsc --noEmit` / `npm run build` / `go build ./...` 過
+   - `test/` 能 `tsc --noEmit` 過
+   - linter 沒紅
+   - 只擋「連編譯都過不了」的 PR
 
-CI 只擋「連編譯都過不了」的 PR。
+2. **`sprint-test.yml` — Sprint E2E Test**（4 lane 全關時）
+   - 觸發：`issues.closed` 事件，gate 檢查 `feature/design/qa/bug` 4 個 label 都沒有 open issue 才跑
+   - 跑 `bash .claude/scripts/run-sprint-tests.sh all`（docker compose + playwright + report）
+   - Artifacts（playwright trace / 截圖 / report）保留 30 天在 actions run
+   - 失敗 → 自動建 bug issue（label 從失敗 test 推 lane）→ engineer 修 → 關 bug → workflow 自動再次觸發
 
 ### 本地（agent 在 push 前必跑）
 
@@ -207,15 +211,11 @@ CI 只擋「連編譯都過不了」的 PR。
 - `unit` — `dev/` 的 unit tests
 - `contract` — grep-based hardcoded testid / api / toast 文字檢查
 
-任一失敗，agent 不准 push（PR 也就不會進到 CI）。
+任一失敗，agent 不准 push。E2E **不在這裡跑**，留給 sprint-test.yml。
 
-### Sprint 收斂時的完整 e2e（orchestrator 跑）
+### Verifier hard gate
 
-`SPRINT="Sprint N" bash .claude/scripts/local-checks.sh e2e`
-- 4 lane 全關後 orchestrator 自動觸發
-- docker compose up + playwright + playwright report
-- Sprint scope 從 `specs/sprints/sprint-N.md` 列出的 feature ID → `test/e2e/fNNN-*.spec.ts`
-- 結果寫到 `state.json.sprint_test_outcome`，verifier 讀 state.json hard-gate
+verifier 啟動前讀最近一次「Sprint E2E Test」workflow 的 conclusion（不是 state.json — workflow result 是真理）。沒 success 就 short-circuit。
 
 ### 測試完自動清理
 

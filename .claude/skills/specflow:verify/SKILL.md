@@ -12,17 +12,17 @@ argument-hint: "[sprint編號]"
 
 ## 🚦 前置條件（hard gate）
 
-verifier 啟動前 **必須** 確認本地 e2e 已跑過且全綠（`state.json.sprint_test_outcome == "success"`）。
+verifier 啟動前 **必須** 確認最近一次「Sprint E2E Test」workflow 為 success。
 
 ```bash
-OUTCOME=$(bash .claude/scripts/state.sh get sprint_test_outcome)
-if [ "$OUTCOME" != "success" ]; then
-  echo "🔴 e2e 未全綠（$OUTCOME）— 修 e2e 再來。verifier 不啟動。"
+LATEST=$(gh run list --workflow "Sprint E2E Test" --limit 1 --json conclusion --jq '.[0].conclusion')
+if [ "$LATEST" != "success" ]; then
+  echo "🔴 Sprint E2E Test 未全綠（$LATEST）— verifier 不啟動。修完 bug 後 workflow 會自動再次觸發。"
   exit 0
 fi
 ```
 
-不是 success 就 short-circuit、不啟動 verifier agent，並在 sprint issue 留言說明原因。
+不是 success（含 failure / cancelled / 從未跑過）就 short-circuit、不啟動 verifier agent，並在 sprint issue 留言說明原因。
 
 ## 三維度
 

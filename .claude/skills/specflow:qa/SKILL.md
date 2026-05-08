@@ -28,16 +28,14 @@ QA 會：
 4. 設定 `test/playwright.config.ts`
 5. 發 PR
 
-### 執行測試（sprint 收斂時，orchestrator 跑）
+### 執行測試（sprint 收斂時，CI 自動跑）
 
-所有 4 lane drain 完畢後，orchestrator 跑：
+所有 4 lane drain 完畢後，最後一個 issue close 觸發 `.github/workflows/sprint-test.yml`：
 
-```bash
-SPRINT="Sprint N" bash .claude/scripts/local-checks.sh e2e
-```
+- 全綠 → workflow conclusion=success → verifier 接手
+- 有失敗 → workflow 自動建 bug issue（附 CI run URL + 失敗 test 名稱 + artifact 連結）→ engineer 修 → 關 bug → workflow 自動再次觸發
 
-- 全綠 → state.sprint_test_outcome=success → verifier 接手
-- 有失敗 → 建立 bug issue（附截圖 + 失敗 test 名稱）→ engineer 修 → 重跑
+QA agent 不再本地跑 e2e；本地只跑 `local-checks.sh` (unit + contract) 確認 push 前不會破壞 CI。
 
 ## 產出
 

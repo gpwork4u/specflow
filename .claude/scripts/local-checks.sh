@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 
-# SpecFlow Local Checks（純 Playwright，無 BDD）
+# SpecFlow Local Checks（push 前 gate，不含 e2e）
 # 用法：
 #   local-checks.sh              # 跑全部（unit + contract）
 #   local-checks.sh unit         # 只跑 unit tests
 #   local-checks.sh contract     # 只跑 contract-check
-#   local-checks.sh e2e          # 跑完整 e2e（4 lane 收斂時用）
+#   local-checks.sh e2e          # 本地跑 e2e（debug 用；正常流程由 CI sprint-test.yml 自動跑）
 #   local-checks.sh cleanup      # 強制清乾淨所有測試暫存
 #
 # 環境變數：
