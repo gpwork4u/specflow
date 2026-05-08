@@ -228,15 +228,6 @@ RULESET_PAYLOAD=$(cat << 'RULESETJSON'
   },
   "rules": [
     {
-      "type": "pull_request",
-      "parameters": {
-        "required_approving_review_count": 1,
-        "dismiss_stale_reviews_on_push": true,
-        "require_last_push_approval": false,
-        "required_review_thread_resolution": true
-      }
-    },
-    {
       "type": "required_status_checks",
       "parameters": {
         "strict_required_status_checks_policy": true,
@@ -244,6 +235,9 @@ RULESET_PAYLOAD=$(cat << 'RULESETJSON'
           { "context": "build-and-lint" }
         ]
       }
+    },
+    {
+      "type": "non_fast_forward"
     }
   ]
 }
@@ -252,10 +246,9 @@ RULESETJSON
 
 if echo "$RULESET_PAYLOAD" | gh api "repos/$REPO/rulesets" --method POST --input - > /dev/null 2>&1; then
   echo "  ✅ Branch protection ruleset created"
-  echo "     - Require 1 approval before merge"
-  echo "     - Require all conversations resolved"
-  echo "     - Dismiss stale reviews on new push"
-  echo "     - Require pr-test status check passing (含 bddgen 0 undefined)"
+  echo "     - Require build-and-lint status check passing"
+  echo "     - Block force push (non-fast-forward)"
+  echo "     - 不要求 review approval（review 改在 sprint-end 一次性執行）"
 else
   echo "  ⚠️  Branch protection ruleset (may already exist or insufficient permissions)"
   echo "     Please manually enable in Settings > Rules > Rulesets:"

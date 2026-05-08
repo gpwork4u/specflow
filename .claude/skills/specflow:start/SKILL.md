@@ -90,6 +90,16 @@ tech-lead：
 
 > **Design-led 順序提示**：理想上 ui-designer 應**先於** tech-lead 完成 contract phase（因為 dom.md / ux-text.md 要吸 ui-designer 的 handoff）。orchestrator 可以先開 design issue → ui-designer 完成 handoff → tech-lead 才產 contracts → 才開 feature/qa issues。
 
+### Phase 3.9：記錄 sprint_base_sha（給 sprint-end review 用）
+
+在啟動 lane 前先把當前 main HEAD 紀錄起來，這是 sprint review 的 diff 起點：
+
+```bash
+SPRINT_BASE=$(git rev-parse main)
+bash .claude/scripts/state.sh set sprint_base_sha "\"$SPRINT_BASE\""
+echo "Sprint base SHA: $SPRINT_BASE"
+```
+
 ### Phase 4：每個 lane 啟動 1 個 agent（背景並行，lane 內循序）
 
 **Lane 制度**：每種類型的 agent **同時只跑一個**，避免 worktree 衝突、token 浪費、merge race condition。每個 agent 在自己 lane 內 loop 認領未完成的 issue。
@@ -130,27 +140,26 @@ fi
 
 **最多 5 個 background agent 同時跑**（backend / frontend / pipeline / qa / ui-designer），各自循序處理 lane 內所有 issue。
 
-### Phase 4.5：Code Review（每個 PR 完成後自動觸發）
+### Phase 4.5：PR 自動 merge（不再 per-PR review）
 
-Engineer 或 QA 發 PR 後，**自動啟動 code-review agent** 進行審查：
+**Code review 改成 sprint-end 一次性執行**（見 Phase 5.5），這裡的 PR 只要：
+1. CI build-and-lint 通過
+2. push 前 `local-checks.sh` 通過（engineer / qa agent 自己會跑）
 
+就可以直接 merge。Engineer / QA agent 在自己的 loop 裡發完 PR 就**自行 merge**：
+
+```bash
+# Engineer / QA agent loop 內的 merge 邏輯
+gh pr checks {pr_number} --watch  # 等 CI 跑完
+gh pr merge {pr_number} --squash --delete-branch  # build-and-lint 過就 merge
 ```
-# 使用 sonnet 模型（只讀不寫，節省 token 成本）
-Agent(subagent_type="code-review", run_in_background=true)
-  input: PR #{pr_number}, Issue #{issue_number}
-```
 
-**Review Loop（最多 3 輪）**：
-1. code-review agent 審查 PR → APPROVE / REQUEST_CHANGES
-2. REQUEST_CHANGES → 通知對應的 engineer/qa agent 處理 review comments → 推送修正
-3. code-review agent 重新 review
-4. APPROVED → PR ready to merge
+**為什麼不 per-PR review**：
+- per-PR 看不到跨 lane 對齊問題（frontend testid 對 qa testid 各自看都對，合起來不對）
+- Engineer 等 review 卡住 lane drain
+- 改成 sprint-end 一次完整 review 看到全貌、找問題更準
 
-**重要**：
-- Branch protection 要求 1 approval + 所有 conversation resolved 才能 merge
-- code-review 使用 sonnet 模型，因為只需要閱讀和判斷，不需要生成程式碼
-- engineer 已有處理 review comments 的機制（見 engineer.md 第七步）
-- 所有 PR 通過 review 並合併後 → Phase 5
+Branch protection 配合改成只要 `build-and-lint` 過、不再要求 approval（見 `init-github.sh`）。
 
 ### Phase 4.9：Infra 確認（Sprint 測試前，需使用者確認）
 
@@ -230,10 +239,10 @@ BASE_URL="${BASE_URL:-http://localhost:3000}" \
   bash .claude/scripts/run-sprint-tests.sh all
 OUTCOME=$?
 
-# 4. 寫結果到 state.json，給 verifier 讀
+# 4. 寫結果到 state.json，BDD 過 → 進 sprint review；BDD 失敗 → 建 bug 重啟 lane
 if [ "$OUTCOME" = "0" ]; then
   bash .claude/scripts/state.sh set sprint_test_outcome '"success"'
-  bash .claude/scripts/state.sh phase "phase-5.5-verify" "啟動 verifier"
+  bash .claude/scripts/state.sh phase "phase-5.5-review" "啟動 sprint code review"
 else
   bash .claude/scripts/state.sh set sprint_test_outcome '"failure"'
   bash .claude/scripts/state.sh phase "phase-5-bdd" "BDD 失敗，建 bug issue"
@@ -299,7 +308,29 @@ AskUserQuestion({
 })
 ```
 
-### Phase 5.5：三維度驗證（背景自動）
+### Phase 5.5：Sprint Code Review（背景自動，一次性全面審查）
+
+BDD 全綠後啟動 code-review agent 對**整個 sprint diff** 做一次全面 review：
+
+```
+Agent(subagent_type="code-review", run_in_background=true,
+      prompt="sprint=$SPRINT, sprint_base=$SPRINT_BASE_SHA")
+```
+
+Code reviewer 檢查：
+- **Contract 對齊（CRITICAL）**：testid / API path / toast 三邊是否一致
+- **Spec 一致性（CRITICAL）**：實作是否覆蓋所有 @sprint-N scenario
+- **安全性（CRITICAL）**：injection / 認證 / 敏感資料
+- **Code 品質（WARNING）**：命名、重複邏輯、error handling
+- **跨 lane 一致（WARNING）**：backend/frontend/qa 對接點
+- **Docker / Infra（WARNING）**：example 檔同步
+
+結果：
+- **PASS / WARNING** → 進入 Phase 5.6 verifier
+- **FAIL（有 CRITICAL）** → 對每個 CRITICAL 建 bug issue（自動推 lane）→ engineer 修 → 重跑 BDD → 重 review
+- 報告寫到 `specs/logs/sprint-{N}-review.md`
+
+### Phase 5.6：三維度驗證（背景自動）
 
 ```
 Agent(subagent_type="verifier", run_in_background=true)

@@ -47,29 +47,16 @@ project/
 
 ```
 loop:
-  # gh --label 是 AND 篩選，--label "a,b" = 同時有 a 和 b。要用 OR 必須走 --search
-  # 1. 優先處理 needs-revision PR 對應的 issue（review 退回的優先回頭修）
-  REVISION=$(gh issue list \
-    --milestone "$SPRINT" \
-    --label "$LANE" --label "needs-revision" \
-    --state open --assignee "@me" \
+  # 認領該 lane 下未 assigned 的 feature 或 bug（用 search 做 OR；--label "a,b" 是 AND）
+  ISSUE=$(gh issue list \
+    --search "milestone:\"$SPRINT\" label:$LANE no:assignee state:open (label:feature OR label:bug)" \
     --json number,title --jq '.[0]')
-
-  if [ -n "$REVISION" ] && [ "$REVISION" != "null" ]; then
-    ISSUE="$REVISION"
-  else
-    # 2. 認領該 lane 下未 assigned 的 feature 或 bug（用 search 做 OR）
-    ISSUE=$(gh issue list \
-      --search "milestone:\"$SPRINT\" label:$LANE no:assignee state:open (label:feature OR label:bug)" \
-      --json number,title --jq '.[0]')
-  fi
 
   if [ -z "$ISSUE" ] || [ "$ISSUE" = "null" ]; then
     echo "✅ Lane $LANE 已清空，exit"
     bash .claude/scripts/state.sh log "engineer lane=$LANE drained"
-    # 標記 lane 全關（觸發 sprint-test 的關鍵：4 lane 全關才跑完整 BDD）
+    # 標記 lane 全關（觸發 sprint-end 流程的關鍵）
     if [ "$LANE" = "backend" ] || [ "$LANE" = "frontend" ] || [ "$LANE" = "pipeline" ]; then
-      # 三 engineer lane 都需 backend+frontend+pipeline 都 drained 才算 feature lane 全關
       OPEN_FEATURE=$(gh issue list --milestone "$SPRINT" --label "feature" --state open --json number --jq 'length')
       OPEN_BUG=$(gh issue list --milestone "$SPRINT" --label "bug" --state open --json number --jq 'length')
       [ "$OPEN_FEATURE" = "0" ] && bash .claude/scripts/state.sh lane-close feature
@@ -196,7 +183,25 @@ Refs #{issue_number}"
 git push -u origin {branch_name}
 ```
 
-### 第三步補充：push 前必跑 local-checks（強制）
+### 第三步補充 A：發 PR + auto-merge（無 per-PR review）
+
+```bash
+# 發 PR
+PR_NUM=$(gh pr create --title "..." --body "Closes #${ISSUE_NUM}" \
+  --label "feature,${LANE}" --milestone "${SPRINT}" \
+  --json number --jq .number)
+
+# 等 build-and-lint 過再 merge（CI 只跑 build + lint，幾分鐘）
+gh pr checks "$PR_NUM" --watch || {
+  echo "🔴 build-and-lint 失敗，修完再來"
+  exit 1
+}
+gh pr merge "$PR_NUM" --squash --delete-branch
+```
+
+**不再 per-PR review**：code review 改在 sprint-end 對整個 sprint diff 一次性執行。所以 engineer 發完 PR 不用等 reviewer，CI 過就 merge，繼續認領下一個 issue。
+
+### 第三步補充 B：push 前必跑 local-checks（強制）
 
 CI **只跑 build + lint**，所有 test 都在本地。push 前必須跑：
 

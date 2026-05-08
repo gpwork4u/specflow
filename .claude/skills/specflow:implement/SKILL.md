@@ -52,21 +52,18 @@ DESIGN=$(gh issue list --milestone "$SPRINT" --label "design" --state open --jso
 
 **最多 5 個 background agent**：backend / frontend / pipeline / qa / ui-designer。
 
-## Code Review Loop（每個 PR 完成後自動觸發）
+## PR 自動 merge（無 per-PR review）
 
-每當 engineer 或 QA 發 PR，**code-review agent 在背景啟動**審查（sonnet model，唯讀，無 lane 限制可同時多個）：
+Engineer / QA 發 PR 後**自行等 CI 過後 merge**，不再啟動 per-PR code-review agent：
 
+```bash
+# Engineer / QA agent loop 內的 merge 邏輯
+gh pr checks {pr_number} --watch
+gh pr merge {pr_number} --squash --delete-branch
 ```
-Agent(subagent_type="code-review", run_in_background=true)
-  input: PR #{pr_number}, Issue #{issue_number}
-```
 
-### Review 結果處理
-
-- **APPROVED** → PR ready to merge（branch protection 檢查通過後 merge）
-- **REQUEST_CHANGES** → 在原 issue 加 `needs-revision` label，**該 lane 的下一輪 loop 會優先處理**（同 lane engineer 不會搶兩個 worktree）
-- **最多 3 輪**：超過標記 `blocked`，需人工介入
+CI 只跑 build-and-lint；test 在 push 前 `local-checks.sh` 已過。Code review 改成 sprint-end 一次性執行（見 `specflow:start` Phase 5.5）。
 
 ## 完成後
 
-所有 lane drain 完畢 + 所有 PR merge → `specflow:start` Phase 4.9 infra 確認 → Phase 5 BDD 測試
+所有 lane drain 完畢 + 所有 PR merge → `specflow:start` Phase 4.9 infra 確認 → Phase 5 BDD 測試 → Phase 5.5 sprint code review → Phase 5.6 verifier

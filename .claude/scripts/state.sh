@@ -37,7 +37,9 @@ ensure_state() {
     "qa": false,
     "bug": false
   },
+  "sprint_base_sha": null,
   "sprint_test_outcome": null,
+  "sprint_review_outcome": null,
   "updated_at": null
 }
 EOF

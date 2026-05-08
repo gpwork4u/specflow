@@ -18,7 +18,7 @@
 | **ui-designer** | 從 Claude design URL 抽 design tokens + 元件 + 字串清單（不從零設計） | `design/` | Design tokens + 元件 handoff + 字串 handoff | sonnet |
 | **engineer** | 認領 feature / bug，寫程式 + unit test（分 backend / frontend / pipeline 三個 lane，每 lane 1 個）| `dev/` | PR（Closes #issue） | sonnet |
 | **qa-engineer** | 認領 QA issue，撰寫 playwright-bdd step definitions | `test/` | Step Definitions PR + Bug issues（附截圖） | sonnet |
-| **code-review** | 審查 PR 品質、spec 一致性、安全性 | 唯讀 | PR Review（approve / request changes） | sonnet |
+| **code-review** | Sprint 結束時對整個 sprint 做一次全面審查（contract 對齊 / spec 一致性 / 安全性 / 跨 lane） | 唯讀 | `sprint-N-review.md` + CRITICAL bug issues | sonnet |
 | **verifier** | 三維度驗證（以 .feature + Cucumber report 為基準） | `specs/` | 驗證報告 | sonnet |
 
 > **Model 配置原則**：spec-writer 與 tech-lead 用 opus（前者要互動釐清需求、後者要做技術選型與架構決策，影響整個 sprint 的方向）；engineer 寫程式、qa 寫測試、ui-designer、verifier、code-review 用 sonnet（已有清楚 spec/scenario 可循的結構化工作）。整體 token 成本約節省 60-65%。
@@ -80,18 +80,19 @@ project/
   │           engineer  qa    ui-designer   ← 同時啟動
   │           dev/實作  test/ design/元件
   │                 └─────┬─────┘
+  │                       │  每個 PR：CI build-and-lint 過 → auto-merge（無 per-PR review）
   │                       ▼
-  │                 code-review（sonnet，每個 PR 自動審查）
-  │                       │
-  │              ┌─ REQUEST_CHANGES → engineer 修改 → 重新 review（最多 3 輪）
-  │              └─ APPROVED ↓
-  │                 merge PR（需 1 approval + conversations resolved）
+  │                 4 lane drain（feature/design/qa/bug 全關）
   │                       ▼
-  │                 Sprint BDD 測試（自動觸發 via GitHub Actions）
-  │                 docker compose up → unit + playwright-bdd → test report
+  │                 Sprint BDD 測試（本地跑，不在 CI）
+  │                 docker compose up → playwright-bdd → cucumber report
   │                       │
   │              ┌─ 失敗 → bug issue（附截圖）→ 修復 → 重測 ─┐
   │              └─ 通過 ↓                                   │
+  │                 sprint code review（一次性全面審查）       │
+  │                       │                                  │
+  │              ┌─ CRITICAL → 建 bug issue → 重啟 lane ─────┤
+  │              └─ PASS / WARNING ↓                         │
   │                 verifier（三維度驗證）                     │
   │                       │                                  │
   │              ┌─ FAIL → 修復 → 重驗 ──────────────────────┘

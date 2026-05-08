@@ -400,23 +400,15 @@ Sprint {N} BDD 測試：使用 playwright-bdd 將 Gherkin .feature 場景轉為 
 Refs #{qa_issue_number}
 BODY
 )"
+
+# 等 CI build-and-lint 過 → auto-merge（無 per-PR review，sprint-end 才 review）
+PR_NUM=$(gh pr list --head "test/sprint-${N}-bdd" --json number --jq '.[0].number')
+gh pr checks "$PR_NUM" --watch && gh pr merge "$PR_NUM" --squash --delete-branch
 ```
 
-### 第八步：持續關注 Test PR Review Comments
+### 第八步：（已移除）
 
-Test PR 發出後，**持續監控 review comments 並自行處理**。
-
-```bash
-gh pr view {pr_number} --json reviews,comments --jq '.reviews[].body, .comments[].body'
-gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | "[\(.path):\(.line)] \(.body)"'
-```
-
-收到 review comment 後：
-1. **閱讀所有 comments**，理解 reviewer 的要求
-2. **回覆 comment** 說明處理方式
-3. **修改 step definitions**（仍在 `test/` 範圍內）
-4. **Commit 並推送**
-5. **在 PR 上留言摘要**
+per-PR review 已取消。QA 發 PR、CI 過就 merge。如果 sprint-end 的 code-review 找出 step definition 問題，會建 bug issue（label `qa`）走另一輪認領流程。
 
 ---
 

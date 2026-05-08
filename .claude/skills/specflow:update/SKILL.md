@@ -165,7 +165,9 @@ if [ -f .specflow/state.json ]; then
   jq '
     . + {
       lane_closed: (.lane_closed // {feature: false, design: false, qa: false, bug: false}),
-      sprint_test_outcome: (.sprint_test_outcome // null)
+      sprint_base_sha: (.sprint_base_sha // null),
+      sprint_test_outcome: (.sprint_test_outcome // null),
+      sprint_review_outcome: (.sprint_review_outcome // null)
     }
   ' .specflow/state.json > "$tmp" && mv "$tmp" .specflow/state.json
   echo "✅ state.json schema 已對齊"
