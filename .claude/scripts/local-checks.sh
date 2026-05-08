@@ -9,6 +9,7 @@ set -eu
 #   local-checks.sh contract     # 只跑 contract-check
 #   local-checks.sh bdd-gate     # 只跑 bddgen --list-undefined
 #   local-checks.sh bdd          # 跑完整 BDD scenario（4 lane 收斂時用）
+#   local-checks.sh cleanup      # 強制清乾淨所有測試暫存（debug 完之後）
 #
 # 環境變數：
 #   SCOPE=qa|engineer    對應 PR 類型，控制要跑哪些（預設全跑）
@@ -89,6 +90,28 @@ run_bdd_full() {
   bash .claude/scripts/run-sprint-tests.sh all
 }
 
+run_cleanup() {
+  log "Cleanup all test artifacts"
+
+  # Docker（如果 docker-compose 還在）
+  if [ -f dev/docker-compose.yml ]; then
+    ( cd dev && docker compose down -v --remove-orphans ) 2>/dev/null || true
+  fi
+
+  # test/ 暫存
+  rm -rf test/features 2>/dev/null || true
+  rm -rf test/test-results 2>/dev/null || true
+  rm -rf test/screenshots 2>/dev/null || true
+  rm -rf test/reports 2>/dev/null || true
+  rm -rf test/.bdd-gen 2>/dev/null || true
+  rm -rf test/playwright-report 2>/dev/null || true
+
+  # bug-evidence 分支已 push 的暫存圖檔
+  rm -rf .github/bug-evidence 2>/dev/null || true
+
+  echo "✅ Cleaned all test artifacts"
+}
+
 case "$CMD" in
   all)
     run_unit
@@ -102,5 +125,6 @@ case "$CMD" in
   contract) run_contract ;;
   bdd-gate) run_bdd_gate ;;
   bdd)      run_bdd_full ;;
+  cleanup)  run_cleanup ;;
   *)        fail "Unknown command: $CMD" ;;
 esac

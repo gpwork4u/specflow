@@ -212,6 +212,18 @@ CI 只擋「連編譯都過不了」的 PR。
 - docker compose up + playwright + cucumber report
 - 結果寫到 `state.json.sprint_test_outcome`，verifier 讀 state.json hard-gate
 
+### 測試完自動清理
+
+每次 `run-sprint-tests.sh` 結束（trap EXIT）：
+- **成功** → `docker compose down -v --remove-orphans` + 清 `test/features` `test-results` `screenshots`（reports 留給 verifier）
+- **失敗** → 只關 docker；保留 `test-results` `screenshots` `reports` 給人類 debug
+
+`verifier` PASS 後：
+- 把 `test/reports/cucumber-report.{json,html}` archive 到 `specs/logs/sprint-N-artifacts/`（入版控做歷史追溯）
+- 跑 `local-checks.sh cleanup` 把 `test/` 全清，下個 sprint 從乾淨狀態起跑
+
+手動清理：`bash .claude/scripts/local-checks.sh cleanup` — 把所有測試暫存（含 reports）歸零，docker 一併下架。debug 完不想留就跑這個。
+
 ### Sprint scope 規則
 
 spec-writer 在 `.feature` 檔頭加 `@sprint-N` tag，這是強制規則。沒打 tag = 未排入 sprint = 任何階段都不會碰。

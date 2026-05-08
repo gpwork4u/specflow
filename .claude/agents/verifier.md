@@ -352,6 +352,15 @@ if [ -n "$MILESTONE_NUM" ]; then
   echo "✅ Milestone $SPRINT 已關閉"
 fi
 
+# Archive 測試報告到 sprint log（給未來追溯，不在 repo 留 raw artifacts）
+mkdir -p "specs/logs/sprint-${SPRINT_NUM}-artifacts"
+[ -f test/reports/cucumber-report.json ] && cp test/reports/cucumber-report.json "specs/logs/sprint-${SPRINT_NUM}-artifacts/"
+[ -f test/reports/cucumber-report.html ] && cp test/reports/cucumber-report.html "specs/logs/sprint-${SPRINT_NUM}-artifacts/"
+git add "specs/logs/sprint-${SPRINT_NUM}-artifacts/" 2>/dev/null || true
+
+# 終極清乾淨：sprint 結束 → 所有測試暫存歸零，下個 sprint 從乾淨狀態起跑
+bash .claude/scripts/local-checks.sh cleanup
+
 # 重置 lane_closed 為下一個 sprint 做準備
 bash .claude/scripts/state.sh set lane_closed '{"feature":false,"design":false,"qa":false,"bug":false}'
 bash .claude/scripts/state.sh set sprint_test_outcome 'null'

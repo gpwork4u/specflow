@@ -5,8 +5,17 @@
 dev/docker-compose.yml
 dev/.env
 
-# Test screenshots (generated at runtime)
+# Test artifacts (generated at runtime by run-sprint-tests.sh / playwright-bdd)
+# 全部由 local-checks.sh cleanup / verifier 自動清；列在 .gitignore 避免誤 commit
 test/screenshots/
+test/test-results/
+test/reports/
+test/features/        # 從 specs/features/ 同步來的 sprint scope 副本
+test/.bdd-gen/        # playwright-bdd 中間產物
+test/playwright-report/
+
+# Bug evidence branch 暫存（QA 失敗時用，push 後即可清）
+.github/bug-evidence/
 
 # Node
 node_modules/

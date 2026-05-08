@@ -48,9 +48,27 @@ if [ "${SKIP_DOCKER:-0}" != "1" ]; then
 fi
 
 cleanup() {
+  EXIT_CODE=$?
+  log "Cleanup (exit=$EXIT_CODE)"
+
+  # 1. Docker：down + 移除 volumes + 清 orphan，避免下次跑卡舊狀態
   if [ "${SKIP_DOCKER:-0}" != "1" ]; then
-    log "Stopping docker compose"
-    ( cd dev && docker compose down ) || true
+    ( cd dev && docker compose down -v --remove-orphans ) 2>/dev/null || true
+  fi
+
+  # 2. test/ 暫存資源：成功時全清；失敗時保留 screenshots/test-results 給 debug
+  if [ "$EXIT_CODE" = "0" ]; then
+    rm -rf test/features 2>/dev/null || true
+    rm -rf test/test-results 2>/dev/null || true
+    rm -rf test/screenshots 2>/dev/null || true
+    rm -rf test/.bdd-gen 2>/dev/null || true   # playwright-bdd 產出的中間檔
+    # reports/ 保留給 verifier，verifier 結束會再清
+    echo "✅ Cleaned: docker stack + test/features + test-results + screenshots"
+  else
+    rm -rf test/features 2>/dev/null || true   # 已重新生成的，可清
+    rm -rf test/.bdd-gen 2>/dev/null || true
+    echo "⚠️  保留 test/test-results + test/screenshots + test/reports 供 debug"
+    echo "    debug 完跑：bash .claude/scripts/local-checks.sh cleanup"
   fi
 }
 trap cleanup EXIT
