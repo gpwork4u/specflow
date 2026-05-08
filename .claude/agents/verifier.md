@@ -10,6 +10,43 @@ maxTurns: 20
 
 **驗證基準**：Gherkin `.feature` 檔案（`specs/features/*.feature`）和 Cucumber 測試報告（`test/reports/cucumber-report.json`）。
 
+## 🚦 前置條件（先做，沒過直接 short-circuit）
+
+驗證前必須先確認本地 BDD 已跑過且全綠。BDD **不在 CI 上跑**（CI 只做 build + lint），所以唯一可信的訊號是 `state.json.sprint_test_outcome`，由 orchestrator 在 Phase 5 跑完 `local-checks.sh bdd` 後寫入。
+
+```bash
+OUTCOME=$(bash .claude/scripts/state.sh get sprint_test_outcome)
+
+if [ "$OUTCOME" != "success" ]; then
+  echo "🔴 sprint_test_outcome=${OUTCOME:-null} — 修 BDD 再來"
+  gh issue comment {sprint_issue} --body "🔴 verifier 短路：本地 BDD 未通過或未執行（state.sprint_test_outcome=${OUTCOME:-null}）。
+
+請執行：
+\`\`\`
+SPRINT_TAG=@sprint-{N} bash .claude/scripts/local-checks.sh bdd
+\`\`\`
+全綠後再跑 \`/specflow:verify\`。"
+  exit 0
+fi
+
+# 額外校驗：cucumber-report.json 存在且最後一次 run 全部 passed
+REPORT="test/reports/cucumber-report.json"
+if [ ! -f "$REPORT" ]; then
+  echo "🔴 找不到 $REPORT — 本地 BDD 沒跑或被清掉"
+  exit 0
+fi
+
+FAILED=$(jq '[.[].elements[] | select(.steps | any(.result.status == "failed"))] | length' "$REPORT" 2>/dev/null || echo "?")
+if [ "$FAILED" != "0" ]; then
+  echo "🔴 cucumber-report 顯示 $FAILED 個失敗 scenario — state 與 report 不一致"
+  exit 0
+fi
+
+echo "✅ Sprint BDD 全綠（state + report 一致）— 開始三維度驗證"
+```
+
+**沒通過前置條件就直接結束，不要進入下面的三維度檢查。** 三維度驗證只在 BDD 全綠時才有意義。
+
 ## 三維度驗證
 
 ### 1. Completeness（完整性）
@@ -301,6 +338,24 @@ git push
 
 # 在 Sprint issue 留言
 gh issue comment {sprint_issue} --body "📋 工作日誌：specs/logs/sprint-${SPRINT_NUM}-log.md"
+
+# 關閉 sprint issue + milestone（PASS / WARNING 才執行；FAIL 不關）
+# 為什麼要在這裡關：下一個 sprint 啟動時，sprint-test workflow 用 milestone 排序挑
+# 「最早一個未關閉的 Sprint」當作 current sprint。沒關掉舊的會卡住下一輪。
+gh issue close {sprint_issue} --reason completed
+
+REPO_OWNER_NAME=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+MILESTONE_NUM=$(gh api "repos/$REPO_OWNER_NAME/milestones?state=open" \
+  --jq '.[] | select(.title=="'"$SPRINT"'") | .number' | head -1)
+if [ -n "$MILESTONE_NUM" ]; then
+  gh api -X PATCH "repos/$REPO_OWNER_NAME/milestones/$MILESTONE_NUM" -f state=closed
+  echo "✅ Milestone $SPRINT 已關閉"
+fi
+
+# 重置 lane_closed 為下一個 sprint 做準備
+bash .claude/scripts/state.sh set lane_closed '{"feature":false,"design":false,"qa":false,"bug":false}'
+bash .claude/scripts/state.sh set sprint_test_outcome 'null'
+bash .claude/scripts/state.sh phase "phase-7-next" "等待使用者確認下一個 sprint 或 release"
 ```
 
 ### 日誌要求

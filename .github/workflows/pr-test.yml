@@ -1,7 +1,18 @@
-name: PR Test (per-feature subset)
+name: PR Build & Lint
 
-# 每次 PR 開啟或推新 commit 時，跑該 PR 涉及的 .feature 子集
-# 不取代 sprint-test.yml（後者在 merge 後跑全套），這層是 fail-fast
+# CI 只做兩件事：
+#   1. 程式碼能 build 過（tsc / go build / 等）
+#   2. Linter 沒紅
+#
+# 所有 test（unit / contract-check / bddgen 0 undefined / BDD scenario）都在本地跑：
+#   bash .claude/scripts/local-checks.sh
+# engineer / qa agent 在 push 前必須跑過、綠燈才能發 PR。
+#
+# 為什麼這樣切：
+#   - docker compose + playwright 在 CI 上慢、port 衝突、不易 debug
+#   - 本地有 image cache、可直接 show-trace、可重現
+#   - sprint 收斂頻率低，不需要每個 PR 都重跑 e2e
+#   - CI 只擋「連編譯都過不了」的 PR，避免明顯 typo / import 缺失合進 main
 
 on:
   pull_request:
@@ -9,69 +20,58 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  pr-test:
+  build-and-lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
+        if: hashFiles('dev/package.json') != '' || hashFiles('test/package.json') != ''
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Determine feature scope
-        id: scope
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body --jq .body)
-          # PR body 慣例會有 "Closes #N"，從 issue label/title 推出 feature ID
-          ISSUE_NUMS=$(echo "$PR_BODY" | grep -oE 'Closes #[0-9]+' | grep -oE '[0-9]+' | tr '\n' ' ')
-
-          # 找出本 PR 變動的 .feature 檔（如果有）
-          CHANGED_FEATURES=$(git diff --name-only origin/main...HEAD -- 'specs/features/*.feature' | tr '\n' ' ')
-
-          if [ -n "$CHANGED_FEATURES" ]; then
-            echo "scope=$CHANGED_FEATURES" >> "$GITHUB_OUTPUT"
-            echo "Running scenarios for changed features: $CHANGED_FEATURES"
-          else
-            # PR 沒改 .feature，但對應 issue 有 feature ID → 從 issue title 找
-            FEATURES=""
-            for n in $ISSUE_NUMS; do
-              TITLE=$(gh issue view "$n" --json title --jq .title 2>/dev/null || true)
-              FID=$(echo "$TITLE" | grep -oE 'F-[0-9]+' | head -1)
-              [ -n "$FID" ] && FEATURES="$FEATURES specs/features/${FID}*.feature"
-            done
-            if [ -n "$FEATURES" ]; then
-              echo "scope=$FEATURES" >> "$GITHUB_OUTPUT"
-              echo "Running scenarios for issues $ISSUE_NUMS: $FEATURES"
-            else
-              # 找不到對應 feature → 跑全套
-              echo "scope=all" >> "$GITHUB_OUTPUT"
-              echo "No specific feature mapped — running all scenarios"
-            fi
-          fi
-
-      - name: Prepare docker-compose
+      # dev/ build
+      - name: Build dev (if Node project)
+        if: hashFiles('dev/package.json') != ''
         working-directory: dev
         run: |
-          [ -f docker-compose.example.yml ] && cp docker-compose.example.yml docker-compose.yml
-          [ -f .env.example ] && cp .env.example .env
+          npm ci --silent 2>/dev/null || npm install --silent
+          if grep -q '"build"' package.json; then
+            npm run build
+          elif [ -f tsconfig.json ]; then
+            npx tsc --noEmit
+          else
+            echo "ℹ️  no build / tsconfig — skip"
+          fi
 
-      - name: Run tests
-        env:
-          BASE_URL: http://localhost:3000
-        run: bash .claude/scripts/run-sprint-tests.sh "${{ steps.scope.outputs.scope }}"
+      # dev/ build (Go)
+      - name: Build dev (if Go project)
+        if: hashFiles('dev/go.mod') != ''
+        working-directory: dev
+        run: |
+          go build ./...
 
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-${{ github.event.pull_request.number }}-test-report
-          path: |
-            test/reports/
-            test/screenshots/
-          if-no-files-found: ignore
+      # dev/ lint
+      - name: Lint dev (if available)
+        if: hashFiles('dev/package.json') != ''
+        working-directory: dev
+        run: |
+          if grep -q '"lint"' package.json; then
+            npm run lint
+          else
+            echo "ℹ️  no lint script — skip"
+          fi
+
+      # test/ build (TypeScript step definitions 也要能編)
+      - name: Build test (if Node project)
+        if: hashFiles('test/package.json') != ''
+        working-directory: test
+        run: |
+          npm ci --silent 2>/dev/null || npm install --silent
+          if [ -f tsconfig.json ]; then
+            npx tsc --noEmit
+          else
+            echo "ℹ️  no tsconfig — skip"
+          fi

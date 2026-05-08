@@ -85,6 +85,22 @@ playwright-bdd 將 .feature 檔案**轉為原生 Playwright test 檔案**，保�
 3. **雙層測試** — API steps（request fixture）+ UI steps（page fixture）
 4. **失敗即截圖** — Playwright 設定自動截圖
 5. **失敗即建 Bug Issue** — 附截圖和 trace
+6. **只實作當前 sprint scope，不能多做**：
+   - 只看 `@sprint-N` 標記的 .feature 檔（檔頭含 `@sprint-N`）
+   - 只為這些 scenario 寫 step definitions
+   - **不**為未來 sprint 的 scenario 預先寫 step（即使你看到了 `@sprint-2` 的 .feature 也不要碰）
+   - **不**寫額外的 "nice to have" 測試（沒在 .feature 裡的 scenario 一律不寫）
+   - **不**自行擴充驗證項目（spec 寫 `Then 顯示 toast`，你就驗 toast，不要順手加「順便驗 button 也消失」）
+   - 共用步驟（`common.steps.ts`）只放當前 sprint 已用到的步驟，不預測未來會需要什麼
+   - 範圍是 spec-writer 和 tech-lead 的職責；QA 越權多寫 = 增加維護成本 + 提早暴露 contract 不穩
+6. **Contract 強制 import**：step definitions 中所有 selector / API path / 預期文字都從 `specs/contracts.ts` import：
+   ```typescript
+   import { TESTIDS, TOAST, API_PATHS } from '../../specs/contracts';
+   await page.locator(`[data-testid="${TESTIDS.sentRecordCard}"]`).click();
+   await expect(page.getByText(TOAST.approveSent)).toBeVisible();
+   const res = await request.get(API_PATHS.sentList);
+   ```
+   不允許 hardcoded `data-testid="..."` 或 `"已送出"` 字面值，CI `contract-check.sh` 會擋。看到 .feature 用 placeholder（如 `{TOAST.approveSent}`）就直接對應 contracts.ts 的 export key。
 
 ---
 
@@ -143,14 +159,30 @@ export default defineConfig({
 });
 ```
 
-### 第四步：複製 .feature 檔案
+### 第四步：複製 .feature 檔案（嚴格 sprint scope）
 
-將當前 sprint 的 .feature 檔案複製到 `test/features/`：
+**只複製檔頭含當前 `@sprint-N` 的 .feature**，未來 sprint 的不要碰：
 
 ```bash
-# 複製當前 sprint 的 feature 檔案
-cp specs/features/f*-*.feature test/features/
+SPRINT_NUM={current_sprint_num}
+TAG="@sprint-${SPRINT_NUM}"
+
+mkdir -p test/features
+rm -f test/features/*.feature 2>/dev/null || true
+
+COUNT=0
+for f in specs/features/*.feature; do
+  [ -f "$f" ] || continue
+  if grep -qE "^[[:space:]]*${TAG}\b" "$f"; then
+    cp "$f" test/features/
+    COUNT=$((COUNT + 1))
+  fi
+done
+echo "Synced $COUNT feature(s) for $TAG"
+[ "$COUNT" = "0" ] && { echo "🔴 ${TAG} 沒有 .feature 檔，停"; exit 1; }
 ```
+
+接下來只為這些檔案裡的 step 寫 definitions。`bddgen --list-undefined` 也只會看這些。
 
 ### 第五步：撰寫 Step Definitions
 
@@ -293,6 +325,40 @@ npx bddgen
 
 `bddgen` 會將 `.feature` 檔案轉換為 Playwright test 檔案到 `testDir`。
 
+### ⚠️ Definition of Done：0 undefined steps
+
+**QA PR 不能 merge，除非 `npx bddgen --list-undefined` 回傳 0 個 undefined step。**
+
+為什麼這是 hard gate：undefined step 在 playwright test 階段會被當成 pending（不算 fail），結果 BDD 測試全綠但其實 scenario 根本沒被驗證 — 假性通過。一旦這種 PR merge 進去，整個 sprint 的測試保證就崩了。
+
+```bash
+cd test
+UNDEF=$(npx bddgen --list-undefined 2>&1 || true)
+echo "$UNDEF"
+
+# 必須 0 個 undefined（grep 不到任何 Given/When/Then/And/But 開頭的提示）
+if echo "$UNDEF" | grep -qE "Given|When|Then|And|But"; then
+  echo "❌ 還有 undefined step — 補完 step definition 才能發 PR"
+  exit 1
+fi
+```
+
+CI（pr-test.yml）會跑同一份檢查，沒過就直接 fail PR。本機要在 commit 前自己跑一次。
+
+### 第六步補充：push 前必跑 local-checks（強制）
+
+CI **只跑 build + lint**，所有 test 都在本地。QA push 前必須通過：
+
+```bash
+bash .claude/scripts/local-checks.sh
+```
+
+QA PR 主要會卡在：
+- `bdd-gate` — 當前 sprint 範圍 `bddgen --list-undefined = 0`（你的 step definitions 必須涵蓋所有 Gherkin step）
+- `contract` — step definitions 裡禁止 hardcoded testid / api path / toast 文字，要 `import { TESTIDS, API_PATHS, TOAST } from '../../specs/contracts'`
+
+任一失敗 → 不准 push。
+
 ### 第七步：Commit + 發 PR
 
 ```bash
@@ -354,10 +420,21 @@ gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | "[\(.path):\(
 
 ---
 
-## Phase B：Sprint 完整測試（Engineer 全部完成後自動執行）
+## Phase B：Sprint 完整測試 — 由 CI 接手，QA 不重做
 
-每個 sprint 的 feature PR 全部合併後，QA 執行**完整測試流程**：
-讀取 infra 設定 → docker compose up → bddgen → playwright test → 產出 report → docker compose down
+> **⚠️ 重要變更**：Sprint 完整測試**已由 `.github/workflows/sprint-test.yml` 自動執行**，QA agent 不再手動跑這段。觸發條件 = milestone 內 feature/design/qa/bug 四 lane 全關（`issues.closed` 事件）。
+>
+> QA agent 在 Phase A 發完 step definitions PR、PR merge 後就 exit；後續：
+> - sprint-test workflow 自動跑完整 BDD（用 `.claude/scripts/run-sprint-tests.sh`）
+> - 失敗時 workflow 自動建 bug issue（含失敗 scenario + lane label），engineer 重啟修復
+> - 全綠後 verifier 接手三維度驗證
+>
+> 不要在 QA agent 裡 docker compose up / bddgen / playwright test — 那是 CI 的工作，重複執行會造成 race（同時兩個 docker stack 搶 port）。
+>
+> 以下舊 Phase B 內容**保留作為失敗 debug 時的參考**，但流程上不再執行。
+
+<details>
+<summary>舊 Phase B 內容（已停用，保留供本機 debug 重現失敗時參考）</summary>
 
 ### B0. 讀取 Infra 設定 + 環境準備
 
@@ -655,6 +732,8 @@ BODY
 gh issue comment {qa_issue_number} --body "🐛 Bug #{bug_number}（附截圖），等待修復"
 gh issue comment {sprint_issue_number} --body "🐛 Bug #{bug_number}"
 ```
+
+</details>
 
 ---
 

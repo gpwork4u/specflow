@@ -40,6 +40,33 @@ gh issue list --label "spec,epic" --state open --json number,title,body
 gh issue list --label "sprint" --milestone "{current_sprint}" --state open --json number,title,body
 ```
 
+### 第一步補充：驗證 sprint scope tags（hard gate）
+
+在開 feature/qa issue 前，**先驗證當前 sprint 範圍的 .feature 都有正確 `@sprint-N` 檔頭 tag**。沒有 tag 的 .feature 在 sprint-test 不會被執行 → 等於該 feature 沒被驗證。如果有遺漏，先 push spec-writer 補完，不要直接開 issue。
+
+```bash
+SPRINT_NUM={current_sprint_num}   # e.g. 1
+SPRINT_TAG="@sprint-${SPRINT_NUM}"
+
+# 從 spec-writer 的「Sprint 規劃表」抽出當前 sprint 應該包含的 feature 清單
+# （在 specs/overview.md 或 spec-writer 產出的 sprint plan）
+
+# 對該 sprint 的每個 .feature 檢查：檔頭 Feature: 上方有 @sprint-N tag
+MISSING=""
+for f in {sprint scope 內的 .feature 檔}; do
+  if ! grep -qE "^[[:space:]]*${SPRINT_TAG}\b" "$f"; then
+    MISSING="$MISSING $f"
+  fi
+done
+
+if [ -n "$MISSING" ]; then
+  echo "🔴 以下 .feature 缺 ${SPRINT_TAG} 檔頭 tag，sprint-test 不會跑到："
+  echo "$MISSING"
+  echo "請通知 spec-writer 補完再繼續。"
+  exit 1
+fi
+```
+
 ### 第二步：技術 Survey（上網調查）
 
 根據 spec 中的需求，**上網搜尋並比較技術方案**，產出調查報告。
@@ -125,6 +152,158 @@ cat specs/infra.md
 
 同時更新 `dev/.env.example`，包含所有服務的連線變數。
 
+### 第二步 C：產出 Contract 三件套（hard gate，spec phase 不可省）
+
+這三個 contract 檔案是**所有 lane 的 single source of truth**。沒先有 contract，engineer / qa 同時動手會立刻出現「frontend 寫 `data-testid="user-card"`、qa 寫 `data-testid="userCard"`、backend 回 `/api/v1/users` 而 frontend 打 `/api/users`」這種互不對齊的災難。
+
+```
+specs/contracts/
+├── api.md         ← path / method / request schema / response schema / error codes
+├── dom.md         ← 每個 testid 名稱 + 出現位置（哪個 component/page）+ selector 慣例
+└── ux-text.md     ← 每個 toast / label / button 文字（spec-writer 已寫進 .feature 的也要在這對齊）
+specs/contracts.ts ← 上述三個檔案的 TS export，frontend / backend / qa 共同 import
+```
+
+**必須在開 feature/qa issue 之前產出**，且每個 issue body 都要明確引用 contract 的 section（不再寫 ad-hoc 的 path/text）。
+
+#### contracts/api.md 範本
+
+```markdown
+# API Contract
+
+> 任何 lane 要新增 / 改 endpoint：先動這個檔案 → review → 再寫程式碼。
+> Backend 是這個檔案的 owner（dependencies.md 要標註）。
+
+## §1 Sent Records
+
+### GET /api/sent
+- Auth: Bearer token
+- Query: `?limit=50&cursor={id}`
+- Response 200:
+  ```json
+  { "records": [...], "nextCursor": null }
+  ```
+- Errors:
+  | Status | code           | 條件 |
+  |--------|----------------|------|
+  | 401    | UNAUTHORIZED   | token 失效 |
+  | 422    | INVALID_CURSOR | cursor 不存在 |
+
+### POST /api/dev/inject-ws-event
+（dev only — 標 @dev tag）
+...
+```
+
+#### contracts/dom.md 範本
+
+```markdown
+# DOM Contract（testid + selector 慣例）
+
+> 命名規則：kebab-case，scope-prefix-noun（如 `sent-record-card`，不要寫 `card1`）。
+> 任何新元件先在這裡登記再開發。
+
+## §1 SentRecordCard
+- testid: `sent-record-card`
+- 出現位置: `dev/src/pages/Sent/RecordList.tsx`
+- 子元素 testid:
+  - `sent-record-card-status-badge`
+  - `sent-record-card-approve-btn`
+
+## §2 EmptyState
+- testid: `empty-state`
+- 出現位置: 全域共用
+```
+
+#### contracts/ux-text.md 範本
+
+```markdown
+# UX Text Contract
+
+> 所有面向使用者的字串必須在此登記。frontend 和 qa 都從 contracts.ts 讀取，不直接 hardcode。
+
+## §1 Toast
+| key            | 文字     | 觸發 |
+|----------------|----------|------|
+| saved          | 已儲存   | PUT /api/* 成功 |
+| approveSent    | 已送出   | POST /api/sent/:id/approve 成功 |
+| networkError   | 網路錯誤 | fetch 失敗 |
+
+## §2 Button labels
+| key   | 文字 | 出現位置 |
+|-------|------|---------|
+| save  | 儲存 | 表單 submit |
+| cancel| 取消 | Modal footer |
+```
+
+#### contracts.ts（frontend/backend/qa 共用 import）
+
+把上述三個 .md 內容轉成 typed exports：
+
+```typescript
+// specs/contracts.ts — DO NOT EDIT manually 中以外；由 tech-lead 在 contract phase 維護
+export const TESTIDS = {
+  sentRecordCard: 'sent-record-card',
+  sentRecordCardApproveBtn: 'sent-record-card-approve-btn',
+  emptyState: 'empty-state',
+  // ...
+} as const;
+
+export const API_PATHS = {
+  sentList: '/api/sent',
+  sentApprove: (id: string) => `/api/sent/${id}/approve`,
+  injectWsEvent: '/api/dev/inject-ws-event',
+} as const;
+
+export const TOAST = {
+  saved: '已儲存',
+  approveSent: '已送出',
+  networkError: '網路錯誤',
+} as const;
+
+export const BUTTON = {
+  save: '儲存',
+  cancel: '取消',
+} as const;
+```
+
+**用法（給 engineer / qa 看的）**：
+
+```tsx
+// frontend
+import { TESTIDS, TOAST, API_PATHS } from '../../specs/contracts';
+<button data-testid={TESTIDS.sentRecordCardApproveBtn}>{BUTTON.save}</button>
+toast.success(TOAST.approveSent);
+fetch(API_PATHS.sentList);
+```
+
+```typescript
+// playwright-bdd step
+import { TESTIDS, TOAST } from '../../specs/contracts';
+await page.locator(`[data-testid="${TESTIDS.sentRecordCardApproveBtn}"]`).click();
+await expect(page.getByText(TOAST.approveSent)).toBeVisible();
+```
+
+```go
+// backend (Go) — 用 codegen 從 api.md 產出 const，或直接手寫對齊
+const SentListPath = "/api/sent"
+mux.HandleFunc("GET " + SentListPath, handleSentList)
+```
+
+任一方改名 → TS 編譯失敗 / Go const 不對齊（pre-commit hook 偵測），不會等到 BDD run 才發現。
+
+#### Hard gate
+
+tech-lead 在 contract 寫完後 commit + push，並在每個 feature/qa issue body 加：
+```
+### Contracts
+- API: specs/contracts/api.md §1
+- DOM: specs/contracts/dom.md §1
+- UX Text: specs/contracts/ux-text.md §1
+- 共用 import: specs/contracts.ts (TESTIDS.sentRecordCard, TOAST.approveSent, API_PATHS.sentList)
+```
+
+contract 沒寫完，**不開 issue**。
+
 ### 第三步：依賴分析（自動化）
 
 分析所有當前 sprint 的 feature，建立依賴圖譜。
@@ -177,6 +356,30 @@ F-004 (Product Model)  ── 無依賴
 
 純後端不加 frontend，純前端不加 backend。**若一個 feature 同時含後端 + 前端**，要拆成兩個 issue（F-001a backend、F-001b frontend），分屬不同 lane 才能讓兩位 engineer 並行。
 
+### 跨 lane endpoint 拆分原則（hard rule）
+
+任何**會被多個 lane 動到的 endpoint / contract 變更**，必須拆成獨立 issue：
+
+| 情境 | 拆法 |
+|------|------|
+| WS 通訊重構 | `WS-Refactor backend` (先) + `WS-Refactor frontend` (後) |
+| 新 API endpoint 給 frontend 用 | `F-XXX backend` (定 contract + impl) + `F-XXX frontend` (consume) |
+| 新增共用 testid | 直接寫進 `contracts/dom.md`，再開 frontend / qa issue 引用 |
+
+**不允許的反模式**：「F-003 frontend lane（含 backend 改動）」混合 lane issue。frontend engineer 動到 backend → 兩位 engineer 同時動同一檔案 → merge race。
+
+**`dependencies.md` 必須標 contract owner**：每個 contract section 都要寫明「誰是權威定義者」（通常是 backend lane）。其他 lane 改 contract 必須先讓 owner 改，再依序 propagate。
+
+```markdown
+## Contract owner
+
+| Contract | Owner lane | 動到的話流程 |
+|----------|-----------|-------------|
+| api.md §1 (Sent records) | backend | 先發 backend PR 改 api.md + 實作 → merge → frontend / qa 才能 follow |
+| dom.md §SentRecordCard   | frontend | frontend 改 → qa 跟著改 step 引用 |
+| ux-text.md §Toast        | frontend | spec-writer 同步改 .feature 中的字串 assertion |
+```
+
 ```bash
 gh issue create \
   --title "📝 [Feature] F-{編號}: {功能名稱}" \
@@ -195,6 +398,13 @@ As a {角色}, I want {功能}, so that {價值}
 
 ## 技術選型
 見 `specs/tech-survey.md`
+
+## Contracts（必填，引用 specs/contracts/）
+- API: `specs/contracts/api.md §X` ({endpoint 名稱})
+- DOM: `specs/contracts/dom.md §X` ({component 名稱})
+- UX Text: `specs/contracts/ux-text.md §X` ({key 列表})
+- Import 用：`specs/contracts.ts` → `TESTIDS.xxx`, `TOAST.xxx`, `API_PATHS.xxx`
+- ⚠️ 所有 hardcoded path / testid / 文字都要改成 import contracts.ts，contract-check.sh 會在 PR 阻擋
 
 ## API Contract
 （從 spec .md 複製）

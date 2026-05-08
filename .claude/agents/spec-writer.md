@@ -87,7 +87,19 @@ Feature: F-001 Resource 管理
 ### .feature 檔案撰寫規範
 
 1. **每個 Feature 對應一個功能** — 檔名 `f{NNN}-{name}.feature`
-2. **使用 @tag 標記** — `@sprint-N` 標記所屬 sprint，`@f{NNN}` 標記功能編號
+2. **使用 @tag 標記（強制）** — 兩個層級都要：
+   - **Feature 級別**：檔頭 `Feature:` 上方寫 `@sprint-N @f{NNN}`，CI 用此判斷檔案屬於哪個 sprint，**不是當前 sprint 的 .feature 檔不會被同步進測試環境**（避免測未實作的功能）
+   - **Scenario 級別**：每個 `Scenario:` 上方寫 `@f{NNN}` + 可選 lane tag（`@backend`/`@frontend`/`@pipeline`），sprint-test 失敗時從 tag 推 lane 自動建 bug issue
+   - 範例：
+     ```gherkin
+     @sprint-1 @f001
+     Feature: 使用者登入
+
+       @f001 @backend
+       Scenario: 使用者登入成功
+         Given ...
+     ```
+   - 沒打 `@sprint-N` 的 .feature 檔會被視為「未排入 sprint」，sprint-test 不會執行（不會把不在 scope 的 scenario 當成失敗）
 3. **Background 放共用前置條件** — 如登入、初始資料
 4. **Scenario 用中文描述** — 場景名稱用中文，清楚表達意圖
 5. **Scenario Outline + Examples** — 用於邊界值測試和多組資料
@@ -159,6 +171,79 @@ AskUserQuestion({
 | 每個 business rule 的邊界條件都有具體數值或行為？ | |
 | 每個功能都至少有 Happy Path + Error Handling + Edge Case 的 scenarios？ | |
 | 每個 scenario 的 Given/When/Then 都具體到可以直接執行測試？ | |
+
+### .feature 文字必須對齊 contracts/ux-text.md
+
+Gherkin scenario 中所有「面向使用者的字串」(toast / button label / 錯誤訊息) 都要在 `specs/contracts/ux-text.md` 登記。**第一次寫 .feature 時 contracts/ 還不存在沒關係**（tech-lead 會在 contract phase 補產）— 但 spec-writer 要先用「TOAST.xxx」「BUTTON.yyy」這種 placeholder key，待 tech-lead 對齊到具體文字。
+
+| ❌ 寫法 | ✅ 寫法 |
+|---------|---------|
+| `Then 顯示成功 toast` | `Then 顯示 toast「{TOAST.approveSent}」(已送出)` |
+| `When 點擊 Mode filter` | `When 點擊 [data-testid={TESTIDS.modeFilter}]` |
+| `Then response 含 'success'` | `Then response code 為 'OK'`（具體 enum 值）|
+
+**模糊度檢測表**新增一列：
+
+| 每個 Gherkin 字串 assertion 都引用 contracts.ts 的 key（不是 hardcoded literal）？ |
+
+如果還在 spec phase（contracts.ts 不存在），允許先寫 `{TESTIDS.xxx}` placeholder，但 placeholder 要列在「待 tech-lead 對齊」清單裡。
+
+### .feature 可測性自驗（發佈 GitHub 前）
+
+寫完所有 `.feature` 檔案、要進入「最終確認」前，**用 `bddgen --dry-run` 自驗 step 是否寫得夠具體可實作**。
+這不是要你產出 step definitions，而是檢查 Gherkin 描述是否存在含糊步驟（如「系統正常運作」、「結果正確」），這類步驟 QA 寫不出 deterministic 實作會卡住。
+
+```bash
+# 在 spec-writer 的工作目錄初始化 test/ 骨架（一次性）
+mkdir -p test/features test/steps
+[ ! -f test/package.json ] && (cd test && npm init -y -s && npm install -D playwright-bdd @cucumber/cucumber @playwright/test typescript ts-node 2>&1 | tail -1)
+
+# 同步 .feature 並 dry-run
+cp specs/features/*.feature test/features/
+
+# 確保有最小 playwright.config 讓 bddgen 跑
+[ ! -f test/playwright.config.ts ] && cat > test/playwright.config.ts <<'EOF'
+import { defineConfig } from '@playwright/test';
+import { defineBddConfig } from 'playwright-bdd';
+const testDir = defineBddConfig({ features: 'features/**/*.feature', steps: 'steps/**/*.ts' });
+export default defineConfig({ testDir });
+EOF
+
+cd test && DRY_OUTPUT=$(npx bddgen 2>&1 || true) && cd ..
+
+# 統計 undefined steps（QA 還沒寫 step defs，所以「全 undefined」是正常的）
+# 真正要檢查的是：步驟是否「寫法」可機讀。bddgen parse 失敗才是 spec 有問題。
+if echo "$DRY_OUTPUT" | grep -qiE "parse error|syntax error|unexpected"; then
+  echo "🔴 .feature 有 Gherkin 語法錯誤，必須修正後才能發佈："
+  echo "$DRY_OUTPUT"
+  # 不發佈，回去修
+  exit 1
+fi
+
+# 額外檢查：警告含糊用詞（spec-writer 自己 review）
+VAGUE=$(grep -nE "(系統正常運作|結果正確|運作正常|看起來正常|大致|似乎|某些|一些)" specs/features/*.feature || true)
+if [ -n "$VAGUE" ]; then
+  echo "⚠️ 偵測到含糊步驟（QA 將難以寫出 deterministic step definition）："
+  echo "$VAGUE"
+  echo "建議改寫成具體可驗證的條件（如「response status 為 200」「DB 中有對應 record」）。"
+fi
+```
+
+通過後才進「最終確認」。
+
+### Contract reference lint（發佈前最後一道）
+
+`.feature` 中如果出現 hardcoded 中文字串作為 assertion，spec-writer 要列出來給使用者過目（這些 placeholder 等 tech-lead 對齊到 contracts/ux-text.md）：
+
+```bash
+echo ""
+echo "📋 待 tech-lead 對齊到 contracts/ux-text.md 的字串："
+grep -nE '(顯示|看到|toast|訊息).*[「『"]' specs/features/*.feature \
+  | grep -vE 'TOAST\.|BUTTON\.|TESTIDS\.' \
+  | head -20
+```
+
+這份清單會放進 spec-writer 留給 tech-lead 的 handoff 訊息，提醒對方在 contract phase 把這些字串對齊到 ux-text.md。
 
 **追問也用 AskUserQuestion**：
 

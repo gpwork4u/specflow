@@ -10,6 +10,8 @@ set -eu
 #   state.sh phase <phase-id> <next-action>    # 紀錄目前 phase + 下一步
 #   state.sh agent-add <type> <issue> <pr> <branch> <status>
 #   state.sh agent-done <pr>                   # 從 in_flight 移除
+#   state.sh lane-close <feature|design|qa|bug>   # 標記 lane 全關
+#   state.sh lane-status                          # 印 4 lane 狀態
 #   state.sh log <message>                     # append 一行 audit log
 #   state.sh show                              # 印出整份 state
 
@@ -29,6 +31,13 @@ ensure_state() {
   "next_action": null,
   "in_flight_agents": [],
   "open_questions": [],
+  "lane_closed": {
+    "feature": false,
+    "design": false,
+    "qa": false,
+    "bug": false
+  },
+  "sprint_test_outcome": null,
   "updated_at": null
 }
 EOF
@@ -82,6 +91,23 @@ case "$cmd" in
     jq --argjson p "$pr" --arg ts "$(now)" \
       '.in_flight_agents |= map(select(.pr != $p)) | .updated_at = $ts' "$STATE_FILE" > "$tmp"
     mv "$tmp" "$STATE_FILE"
+    ;;
+  lane-close)
+    ensure_state
+    lane="$1"
+    case "$lane" in
+      feature|design|qa|bug) ;;
+      *) echo "lane must be feature|design|qa|bug" >&2; exit 1 ;;
+    esac
+    tmp=$(mktemp)
+    jq --arg l "$lane" --arg ts "$(now)" \
+      '.lane_closed[$l] = true | .updated_at = $ts' "$STATE_FILE" > "$tmp"
+    mv "$tmp" "$STATE_FILE"
+    echo "[$(now)] lane-close $lane" >> "$LOG_FILE"
+    ;;
+  lane-status)
+    ensure_state
+    jq -r '.lane_closed | to_entries[] | "\(.key)=\(.value)"' "$STATE_FILE"
     ;;
   log)
     ensure_state

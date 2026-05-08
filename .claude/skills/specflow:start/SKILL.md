@@ -57,10 +57,14 @@ spec-writer 產出：
 
 tech-lead：
 1. **上網 survey 技術選型**（WebSearch + WebFetch），產出 `specs/tech-survey.md`
-2. 讀取 `specs/` 目錄，自動分析依賴圖譜，產出 `specs/dependencies.md`
-3. 建立 feature issues（含 scenarios + 實作指引 + 技術選型）
-4. 建立 QA issue（含 scenarios 清單）
-5. 建立 design issue（含 UI 元件清單，如 sprint 有 UI 功能）
+2. **產出 Contract 三件套**（hard gate）— `specs/contracts/api.md` + `dom.md` + `ux-text.md` + `specs/contracts.ts`，作為 lane 之間的 single source of truth
+3. 讀取 `specs/` 目錄，自動分析依賴圖譜，產出 `specs/dependencies.md`（含 contract owner 標記）
+4. 驗證 .feature 檔頭都有 `@sprint-N` tag（hard gate）
+5. 建立 feature issues（含 scenarios + 實作指引 + 技術選型 + contract reference）
+6. 建立 QA issue（含 scenarios 清單 + contract reference）
+7. 建立 design issue（含 UI 元件清單 + contract reference）
+
+**Contract 沒寫完不開 issue** — 否則 engineer 開始寫程式碼時 contract 還沒對齊，會出現 hardcoded literal 滿天飛。
 
 ### Phase 4：每個 lane 啟動 1 個 agent（背景並行，lane 內循序）
 
@@ -175,27 +179,85 @@ AskUserQuestion({
 
 **如果使用者選了自訂 URL（Other）**，將 BASE_URL 傳入 QA agent。
 
-### Phase 5：Sprint BDD 測試（Infra 確認後自動執行）
+### Phase 5：Sprint BDD 測試（本地執行，orchestrator 跑）
 
-**直接呼叫共用 script**（與 CI 完全相同）：
+**BDD 不在 CI 上跑** — playwright + docker compose 在 GitHub Actions 上慢、易超時、port 衝突；改在 orchestrator 的本地環境跑（使用者的機器或 self-hosted runner）。
 
 ```bash
-# 自動部署模式
-BASE_URL={使用者確認的URL} bash .claude/scripts/run-sprint-tests.sh all
+SPRINT="{current_sprint}"
+SPRINT_NUM=$(echo "$SPRINT" | grep -oE '[0-9]+' | head -1)
 
-# 服務已在跑模式
-SKIP_DOCKER=1 BASE_URL={使用者確認的URL} bash .claude/scripts/run-sprint-tests.sh all
+# 1. 確認 4 lane 全關（feature/design/qa/bug）
+for LABEL in feature design qa bug; do
+  OPEN=$(gh issue list --milestone "$SPRINT" --label "$LABEL" --state open --json number --jq 'length')
+  if [ "$OPEN" != "0" ]; then
+    echo "Lane $LABEL 還有 $OPEN 個 open issue，等 engineer/qa drain"
+    bash .claude/scripts/state.sh phase "phase-4-impl" "wait lane $LABEL"
+    exit 0
+  fi
+done
+
+# 2. 確認本機 docker / node 已就緒（doctor.sh 已在 phase 0 跑過，這裡只做最終確認）
+docker compose version >/dev/null 2>&1 || { echo "🔴 docker compose 不在，無法跑 BDD"; exit 1; }
+
+# 3. 跑 BDD（限定 @sprint-N scope）
+SPRINT_TAG="@sprint-${SPRINT_NUM}" \
+BASE_URL="${BASE_URL:-http://localhost:3000}" \
+  bash .claude/scripts/run-sprint-tests.sh all
+OUTCOME=$?
+
+# 4. 寫結果到 state.json，給 verifier 讀
+if [ "$OUTCOME" = "0" ]; then
+  bash .claude/scripts/state.sh set sprint_test_outcome '"success"'
+  bash .claude/scripts/state.sh phase "phase-5.5-verify" "啟動 verifier"
+else
+  bash .claude/scripts/state.sh set sprint_test_outcome '"failure"'
+  bash .claude/scripts/state.sh phase "phase-5-bdd" "BDD 失敗，建 bug issue"
+fi
 ```
 
-Script 會：
-1. 啟動 docker（除非 SKIP_DOCKER=1）+ 等 health check
-2. Unit tests
-3. 同步 `specs/features/*.feature` → `test/features/`
-4. `npx bddgen` + `npx playwright test`
-5. **Coverage check**：實際跑的 scenarios 數量 = `specs/features/` 內 Scenario 總數，否則 fail（防止漏測）
-6. 自動 docker compose down
+#### 失敗處理（orchestrator 自動建 bug + 重啟 lane）
 
-任一階段失敗 → script exit 非 0 → QA 建 bug issue（附截圖：`test/screenshots/`、失敗報告：`test/reports/cucumber.json`）→ engineer 修復 → 重測（最多 3 輪）。
+```bash
+if [ "$OUTCOME" != "0" ]; then
+  # 從 cucumber JSON 抽失敗 scenario
+  FAILED=$(jq -r '
+    [.[].elements[] | select(.steps | any(.result.status == "failed"))]
+    | map("- \(.name) (\(.tags[0].name // "no-tag"))") | join("\n")
+  ' test/reports/cucumber-report.json 2>/dev/null || echo "(無法解析 report)")
+
+  # 從 tag 推 lane（@backend / @frontend / @pipeline），預設 backend
+  LANE=$(echo "$FAILED" | grep -oE '@(backend|frontend|pipeline)' | head -1 | tr -d '@')
+  LANE="${LANE:-backend}"
+
+  gh issue create \
+    --title "🐛 [Bug] Sprint $SPRINT BDD failed" \
+    --label "bug,$LANE" \
+    --milestone "$SPRINT" \
+    --body "本地 BDD 測試失敗（@sprint-${SPRINT_NUM}）
+
+### 失敗的 Scenario
+$FAILED
+
+### 報告
+\`test/reports/cucumber-report.json\` + \`test/screenshots/\`
+
+### 修復流程
+Engineer 修完 PR merge → 關此 bug → orchestrator 自動回到 Phase 5 重跑 BDD"
+fi
+```
+
+- `success` → 進入 Phase 5.5 verifier
+- `failure` → 自動建 bug issue（4 lane 重新打破平衡） → engineer lane 重啟 → drain → 回到 Phase 5 重跑 BDD
+
+#### 為什麼 BDD 不上 CI
+
+1. **本地 docker compose 比 CI 快** — image cache、不用每次 cold-pull
+2. **port 衝突風險** — CI 上 Playwright + docker compose 容易 race
+3. **可重現** — 出錯時使用者機器上直接 `npx playwright show-trace` 看 trace
+4. **省 CI 分鐘** — sprint 收斂頻率不高（每次 sprint 結束 1 次），不需要每次 PR 都跑
+
+CI 只負責**輕量 gate**（unit / lint / contract-check / bddgen 0 undefined），重量級 e2e 留在本地。
 
 **每輪重測前再次確認環境**：
 ```javascript

@@ -10,6 +10,20 @@ argument-hint: "[sprint編號]"
 
 在 QA 測試通過後、release 前，對 sprint 進行全面驗證。
 
+## 🚦 前置條件（hard gate）
+
+verifier 啟動前 **必須** 確認最近一次「Sprint Complete Test」workflow 為 success。
+
+```bash
+LATEST=$(gh run list --workflow "Sprint Complete Test" --limit 1 --json conclusion --jq '.[0].conclusion')
+if [ "$LATEST" != "success" ]; then
+  echo "🔴 BDD 未全綠（$LATEST）— 修 BDD 再來。verifier 不啟動。"
+  exit 0
+fi
+```
+
+不是 success（含 failure / cancelled / 從未跑過）就 short-circuit、不啟動 verifier agent，並在 sprint issue 留言說明原因。
+
 ## 三維度
 
 | 維度 | 檢查什麼 | 嚴重等級 |

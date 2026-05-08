@@ -39,10 +39,15 @@ project/
 │   ├── playwright.config.ts
 │   ├── screenshots/
 │   └── reports/
-├── specs/            ← 📖 Spec + Tech Survey + Gherkin 場景
+├── specs/            ← 📖 Spec + Tech Survey + Gherkin 場景 + Contracts
 │   ├── overview.md
 │   ├── tech-survey.md
 │   ├── features/          ← .md（API contract）+ .feature（Gherkin 場景）
+│   ├── contracts/         ← 🔒 Single source of truth (tech-lead 維護)
+│   │   ├── api.md         ← path / method / schema
+│   │   ├── dom.md         ← testid / selector
+│   │   └── ux-text.md     ← toast / label / button 文字
+│   ├── contracts.ts       ← 上述三個檔的 TS export，frontend/qa/backend 共用 import
 │   ├── dependencies.md
 │   ├── logs/              ← Sprint 工作日誌
 │   └── changes/
@@ -129,6 +134,7 @@ Epic #1（索引 + 需求）
 | `/specflow:change [描述]` | 已完成專案新增 Change Request | 對話確認影響範圍 |
 | `/specflow:verify` | 三維度驗證 sprint | 不需要（自動） |
 | `/specflow:release` | 部署 production | 確認部署 |
+| `/specflow:update` | 升級 SpecFlow 到 upstream 最新版（含本地自訂偵測 + state.json migration） | 確認衝突處理策略 |
 
 ## Lane 制（同類型 agent 同時最多 1 個）
 
@@ -169,9 +175,75 @@ Release 後若要新增/修改功能：
 
 Spec-writer 產出 Gherkin `.feature` 檔案 → QA 撰寫 step definitions → playwright-bdd 將場景轉為 Playwright tests。
 
-**兩層 CI 測試**：
-1. `pr-test.yml` — PR 開啟/推 commit 時，跑該 PR 涉及的 feature 子集（fail-fast）
-2. `sprint-test.yml` — sprint 內所有 feature/design/bug issue 關閉後，跑完整 BDD（Coverage check 強制 = `specs/features/` 內所有 scenario 都被執行）
+**所有 test 都在本地跑，CI 只做 build + lint。**
+
+### CI（GitHub Actions）只負責
+
+`pr-test.yml` 唯一 job 是 **build-and-lint**：
+- `dev/` 能 `tsc --noEmit` / `npm run build` / `go build ./...` 過
+- `test/` 能 `tsc --noEmit` 過（step definitions 也是 TS）
+- linter 沒紅
+- **不跑** unit tests / contract-check / bddgen / BDD scenario
+
+CI 只擋「連編譯都過不了」的 PR。
+
+### 本地（agent 在 push 前必跑）
+
+`bash .claude/scripts/local-checks.sh`（engineer / qa agent 在 push 前的強制 gate）：
+- `unit` — `dev/` 的 unit tests
+- `contract` — grep-based hardcoded testid / api / toast 文字檢查
+- `bdd-gate` — 當前 sprint 範圍的 `bddgen --list-undefined = 0`
+
+任一失敗，agent 不准 push（PR 也就不會進到 CI）。
+
+### Sprint 收斂時的完整 BDD（orchestrator 跑）
+
+`SPRINT_TAG=@sprint-N bash .claude/scripts/local-checks.sh bdd`
+- 4 lane 全關後 orchestrator 自動觸發
+- docker compose up + playwright + cucumber report
+- 結果寫到 `state.json.sprint_test_outcome`，verifier 讀 state.json hard-gate
+
+### Sprint scope 規則
+
+spec-writer 在 `.feature` 檔頭加 `@sprint-N` tag，這是強制規則。沒打 tag = 未排入 sprint = 任何階段都不會碰。
+
+QA 寫 step definitions **只實作當前 sprint scope，不能多做**：
+- 只同步檔頭含 `@sprint-N` 的 .feature
+- 不為未來 sprint 預寫 step
+- 不自行擴充 .feature 沒寫的驗證項目
+- 共用步驟只放當前 sprint 已用到的
+
+## Contract 三件套（避免 lane 之間互不對齊）
+
+| 檔案 | 內容 | 誰用 | Owner |
+|------|------|------|-------|
+| `specs/contracts/api.md` | path / method / JSON schema / error codes | backend impl + frontend client + qa request mock | backend lane |
+| `specs/contracts/dom.md` | testid 名稱 + 出現位置 + selector 慣例 | frontend component + qa selector | frontend lane |
+| `specs/contracts/ux-text.md` | toast / label / button 文字 | frontend i18n + qa assertion | frontend lane（spec-writer 同步） |
+| `specs/contracts.ts` | 上述三個檔案的 TS typed export | 所有 lane import | tech-lead 自動產出/維護 |
+
+**規則**：
+1. tech-lead 在 contract phase（spec → impl 之間）產出這三個檔案，沒寫完不開 issue
+2. 任何 lane 動到 contract → 先發 PR 改 contract → owner approve → 其他 lane follow
+3. `dev/` `test/` 內**禁止 hardcoded** path / testid / 中文字串 — 必須 import `specs/contracts.ts`
+4. PR 時 `.claude/scripts/contract-check.sh` 會 grep diff 阻擋違規
+5. **跨 lane endpoint 必須拆獨立 issue**（如 `WS-Refactor backend` 先做 + `WS-Refactor frontend` 後做），不允許混合 lane
+
+**好處**：任一方改名 → TS 編譯失敗或 contract-check 紅燈，不會等到 BDD run 才發現「frontend 用 `userCard`、qa 找 `user-card`」這種對不上的問題。
+
+**驗證閘門順序（不可跳級）**：
+```
+QA step definitions 完整 (bddgen 0 undefined)
+  ↓ 通過 pr-test.yml 才能 merge
+四 lane 全關（feature/design/qa/bug）
+  ↓ 觸發 sprint-test.yml 跑完整 BDD
+sprint-test 全綠
+  ↓ verifier 才會啟動三維度驗證
+verifier PASS
+  ↓ 自動產出 sprint log，可進 release
+```
+
+verifier 啟動前會先檢查最近一次 sprint-test workflow run 是 success，否則直接 short-circuit 並提示「修 BDD 再來」。
 
 **本機與 CI 共用同一份腳本** `.claude/scripts/run-sprint-tests.sh`：
 - 啟動 docker → unit tests → 同步 .feature → bddgen → playwright test → coverage check

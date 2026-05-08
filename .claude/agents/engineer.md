@@ -47,15 +47,34 @@ project/
 
 ```
 loop:
-  ISSUE=$(gh issue list \
+  # gh --label 是 AND 篩選，--label "a,b" = 同時有 a 和 b。要用 OR 必須走 --search
+  # 1. 優先處理 needs-revision PR 對應的 issue（review 退回的優先回頭修）
+  REVISION=$(gh issue list \
     --milestone "$SPRINT" \
-    --label "$LANE" --label "feature,bug" \
-    --state open --assignee "" \
+    --label "$LANE" --label "needs-revision" \
+    --state open --assignee "@me" \
     --json number,title --jq '.[0]')
 
-  if [ -z "$ISSUE" ]; then
+  if [ -n "$REVISION" ] && [ "$REVISION" != "null" ]; then
+    ISSUE="$REVISION"
+  else
+    # 2. 認領該 lane 下未 assigned 的 feature 或 bug（用 search 做 OR）
+    ISSUE=$(gh issue list \
+      --search "milestone:\"$SPRINT\" label:$LANE no:assignee state:open (label:feature OR label:bug)" \
+      --json number,title --jq '.[0]')
+  fi
+
+  if [ -z "$ISSUE" ] || [ "$ISSUE" = "null" ]; then
     echo "✅ Lane $LANE 已清空，exit"
     bash .claude/scripts/state.sh log "engineer lane=$LANE drained"
+    # 標記 lane 全關（觸發 sprint-test 的關鍵：4 lane 全關才跑完整 BDD）
+    if [ "$LANE" = "backend" ] || [ "$LANE" = "frontend" ] || [ "$LANE" = "pipeline" ]; then
+      # 三 engineer lane 都需 backend+frontend+pipeline 都 drained 才算 feature lane 全關
+      OPEN_FEATURE=$(gh issue list --milestone "$SPRINT" --label "feature" --state open --json number --jq 'length')
+      OPEN_BUG=$(gh issue list --milestone "$SPRINT" --label "bug" --state open --json number --jq 'length')
+      [ "$OPEN_FEATURE" = "0" ] && bash .claude/scripts/state.sh lane-close feature
+      [ "$OPEN_BUG" = "0" ] && bash .claude/scripts/state.sh lane-close bug
+    fi
     exit 0
   fi
 
@@ -82,6 +101,11 @@ PR 後**不等 review**，直接認領下一個。code-review agent 會在背景
 4. **完成即發 PR**
 5. **只動 `dev/`**：所有程式碼、設定、migration 都在 `dev/` 下
 6. **維護 Docker Compose**：確保 `docker compose up` 能一鍵啟動完整服務
+7. **Contract 強制 import**：所有 API path / testid / toast 文字都從 `specs/contracts.ts` import，不允許 hardcoded literal。要新增 contract entry → **先改 `specs/contracts.ts` + 對應 `specs/contracts/*.md`**（同一個 PR 裡），CI 的 `contract-check.sh` 會擋下違規 PR。
+   - 新 endpoint → 先動 `specs/contracts/api.md` + `API_PATHS`
+   - 新 testid → 先動 `specs/contracts/dom.md` + `TESTIDS`
+   - 新 toast / label → 先動 `specs/contracts/ux-text.md` + `TOAST` / `BUTTON`
+   - 改名同理：先改 contract，PR review 通過 owner lane 再 follow
 
 ## 工作流程
 
@@ -171,6 +195,23 @@ Refs #{issue_number}"
 
 git push -u origin {branch_name}
 ```
+
+### 第三步補充：push 前必跑 local-checks（強制）
+
+CI **只跑 build + lint**，所有 test 都在本地。push 前必須跑：
+
+```bash
+bash .claude/scripts/local-checks.sh
+```
+
+包含：
+- `unit` — `dev/` 的 unit tests（npm test / go test）
+- `contract` — grep-based contract-check（hardcoded testid / api / toast 文字）
+- `bdd-gate` — 當前 sprint 範圍 `bddgen --list-undefined = 0`
+
+任一失敗 → 不准 push。失敗訊息會明確告訴你違規的檔案 + 行號 + 修法。
+
+> 為什麼 CI 不跑這些：docker compose + playwright 在 GitHub Actions 上慢且 port 易衝突；本地有 image cache、可 `npx playwright show-trace` 看 trace。
 
 ### 第四步 B：維護 Docker Compose
 

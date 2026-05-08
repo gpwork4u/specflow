@@ -71,17 +71,48 @@ AskUserQuestion({
 
 ### 5. 根據 phase 路由到對應 orchestrator
 
-| phase | 接續動作 |
-|-------|---------|
-| `phase-2-spec` | 啟動 spec-writer 繼續討論 |
-| `phase-3-techlead` | 啟動 tech-lead（背景） |
-| `phase-4-impl` | 啟動 engineer/qa/ui-designer（背景，根據未完成的 issue） |
-| `phase-4.5-review` | 對 open PR 啟動 code-review |
-| `phase-4.9-infra` | 用 AskUserQuestion 確認 infra |
-| `phase-5-bdd` | 執行 BDD 測試 |
-| `phase-5.5-verify` | 啟動 verifier |
-| `phase-6-close` | 產出 sprint log + 關 milestone |
-| `phase-7-next` | 詢問是否進入下一個 sprint |
+決策前**先讀 `lane_closed` + GitHub 即時狀態**，避免重啟已完成的 lane：
+
+```bash
+LANE_CLOSED=$(bash .claude/scripts/state.sh get lane_closed)
+SPRINT_TEST_OUTCOME=$(bash .claude/scripts/state.sh get sprint_test_outcome)
+SPRINT="{current_sprint}"
+
+# 用 GitHub 即時資料校正（state.json 可能過時）
+OPEN_FEATURE=$(gh issue list --milestone "$SPRINT" --label "feature" --state open --json number --jq 'length')
+OPEN_DESIGN=$(gh issue list --milestone "$SPRINT" --label "design" --state open --json number --jq 'length')
+OPEN_QA=$(gh issue list --milestone "$SPRINT" --label "qa" --state open --json number --jq 'length')
+OPEN_BUG=$(gh issue list --milestone "$SPRINT" --label "bug" --state open --json number --jq 'length')
+
+ALL_LANES_CLOSED="false"
+[ "$OPEN_FEATURE" = "0" ] && [ "$OPEN_DESIGN" = "0" ] && [ "$OPEN_QA" = "0" ] && [ "$OPEN_BUG" = "0" ] && ALL_LANES_CLOSED="true"
+```
+
+| phase | 跳過條件 | 接續動作 |
+|-------|---------|---------|
+| `phase-2-spec` | — | 啟動 spec-writer 繼續討論 |
+| `phase-3-techlead` | feature/qa/design issues 已存在 → 跳到 phase-4 | 啟動 tech-lead（背景） |
+| `phase-4-impl` | `ALL_LANES_CLOSED=true` → 跳到 phase-5 | 只啟動 `OPEN_$LANE > 0` 的 lane（不要重啟已 drained） |
+| `phase-4.5-review` | open PR 已全部 APPROVED → 跳到 phase-4-impl 等 merge | 對 open 且 review pending 的 PR 啟動 code-review |
+| `phase-5-bdd` | `sprint_test_outcome=success` → 跳到 phase-5.5；`failure` → 確認最新 bug issue 是否已關，否則回 phase-4 | 輪詢 sprint-test workflow 結果 |
+| `phase-5.5-verify` | sprint issue 已 closed → 跳到 phase-7 | 啟動 verifier |
+| `phase-6-close` | milestone 已 closed → phase-7 | 產出 sprint log + 關 milestone（verifier 會做） |
+| `phase-7-next` | — | 詢問是否進入下一個 sprint |
+
+**重啟 lane 前的去重邏輯**：
+
+```bash
+for LANE in backend frontend pipeline; do
+  COUNT=$(gh issue list --milestone "$SPRINT" --label "$LANE" --state open --json number --jq 'length')
+  ASSIGNED_OPEN=$(gh issue list --milestone "$SPRINT" --label "$LANE,in-progress" --state open --json number --jq 'length')
+  # 已 drained 不啟動
+  [ "$COUNT" = "0" ] && echo "lane=$LANE 已 drained，跳過" && continue
+  # 已有 in-progress 表示前一個 agent 還在跑（worktree 還在），不重啟
+  [ "$ASSIGNED_OPEN" -gt "0" ] && echo "lane=$LANE 已有 in-progress issue，跳過" && continue
+  # 啟動該 lane
+  # Agent(subagent_type="engineer", run_in_background=true, prompt="lane=$LANE, sprint=$SPRINT")
+done
+```
 
 ## 重要原則
 

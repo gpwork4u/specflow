@@ -50,6 +50,7 @@ create_label "change"           "BFD4F2" "Change Request（既有專案新需求
 create_label "backend"          "5319E7" "後端 feature（backend engineer 認領）"
 create_label "frontend"         "FBCA04" "前端 feature（frontend engineer 認領）"
 create_label "pipeline"         "0E8A16" "CI/CD/infra/docker（pipeline engineer 認領）"
+create_label "needs-revision"   "EE0701" "Code review 退回，engineer 需修改"
 
 # ---- Issue Templates ----
 echo ""
@@ -234,6 +235,15 @@ RULESET_PAYLOAD=$(cat << 'RULESETJSON'
         "require_last_push_approval": false,
         "required_review_thread_resolution": true
       }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          { "context": "build-and-lint" }
+        ]
+      }
     }
   ]
 }
@@ -245,6 +255,7 @@ if echo "$RULESET_PAYLOAD" | gh api "repos/$REPO/rulesets" --method POST --input
   echo "     - Require 1 approval before merge"
   echo "     - Require all conversations resolved"
   echo "     - Dismiss stale reviews on new push"
+  echo "     - Require pr-test status check passing (含 bddgen 0 undefined)"
 else
   echo "  ⚠️  Branch protection ruleset (may already exist or insufficient permissions)"
   echo "     Please manually enable in Settings > Rules > Rulesets:"
