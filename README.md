@@ -151,11 +151,11 @@ npx playwright install
   │                 ┌─────┴─────┐
   │                 ▼           ▼
   │           engineer ×N    qa-engineer        ← 同時啟動
-  │           認領 feature   .feature → step definitions
+  │           認領 feature   AC → e2e .spec.ts
   │           各自發 PR      發 step defs PR
   │                 └─────┬─────┘
   │                       ▼
-  │                 執行 playwright-bdd BDD tests
+  │                 執行 Playwright e2e tests
   │                       │
   │              ┌─ 失敗 → bug issue → engineer 修復 → 重測 ─┐
   │              └─ 通過 ↓                                   │
@@ -179,8 +179,8 @@ npx playwright install
 | 2. Spec 討論 | 討論需求、API contract、架構、sprint 規劃 | spec-writer | **對話互動** |
 | 3. 工作分配 | 分析依賴圖譜，開 feature + QA issues | tech-lead | 背景自動 |
 | 4a. 實作 | 在 `dev/` 實作 + 撰寫 unit tests | engineer ×N | 背景並行 |
-| 4b. 測試撰寫 | 在 `test/` 撰寫 playwright-bdd step definitions | qa-engineer | 背景同步 |
-| 5. 測試驗證 | 執行 unit + playwright-bdd BDD tests，失敗建 bug issue（附截圖）| qa-engineer | 背景自動 |
+| 4b. 測試撰寫 | 在 `test/e2e/` 撰寫 Playwright .spec.ts | qa-engineer | 背景同步 |
+| 5. 測試驗證 | 執行 unit + Playwright e2e tests，失敗建 bug issue（附截圖）| qa-engineer | 背景自動 |
 | 5.5 三維度驗證 | Completeness + Correctness + Coherence | verifier | 背景自動 |
 | 6. 工作日誌 | 產出 sprint 工作日誌，關閉 milestone | verifier | 背景自動 |
 | 7. 自動推進 | 啟動下一個 sprint，或通知使用者全部完成 | 自動 | 背景自動 |
@@ -196,7 +196,7 @@ npx playwright install
 - Epic Issue + Sprint Issues
 - Sprint Milestones
 
-Spec 涵蓋：技術架構、API contract、data model、business rules、**Gherkin .feature 場景**（Given/When/Then）。
+Spec 涵蓋：技術架構、API contract、data model、business rules、**acceptance criteria 條列**（Happy / Error / Edge）。
 
 ### tech-lead — 技術主管
 
@@ -214,64 +214,61 @@ Spec 涵蓋：技術架構、API contract、data model、business rules、**Gher
 職責包含：
 - 程式碼實作（`dev/src/`）
 - **撰寫 unit tests**（`dev/__tests__/`）
-- 確保所有 `.feature` Gherkin scenarios 能通過
+- 確保所有 acceptance criteria 對應的 e2e tests 能通過
 
 **不碰 `test/` 目錄**（那是 QA 的領域）。
 
 ### qa-engineer — QA 工程師
 
-認領 QA issue，**在 `test/` 目錄下**使用 playwright-bdd 撰寫 step definitions。與 engineer 同時啟動。
+認領 QA issue，**在 `test/` 目錄下**撰寫 Playwright e2e tests。與 engineer 同時啟動。
 
 **不碰 `dev/` 目錄**（那是 Engineer 的領域）。
 
-#### BDD 測試架構（playwright-bdd）
+#### 測試架構（純 Playwright）
 
 | 元件 | 工具 | 用途 |
 |------|------|------|
-| **Feature 檔案** | Gherkin `.feature` | Spec-writer 產出的場景（source of truth） |
-| **Step Definitions** | playwright-bdd | QA 撰寫的自動化邏輯（API + UI） |
+| **Acceptance Criteria** | spec `.md` | Spec-writer 寫的 AC 條列（source of truth） |
+| **E2E Tests** | Playwright `.spec.ts` | QA 把每條 AC 轉成的 Playwright test |
 | **Test Runner** | Playwright | 執行測試、截圖、trace |
-| **Reports** | Cucumber JSON + HTML | 場景級別的測試報告 |
+| **Reports** | Playwright JSON + HTML | test 級別的報告 |
 
-#### Gherkin → Step Definition 對應
+#### AC → Playwright Test 對應
 
-| Gherkin 步驟 | Step Definition 實作 |
-|-------------|---------------------|
-| Given（前置條件） | `request.post()` 登入 / `page.goto()` |
-| When（動作） | `request.post(url, { data })` / `page.click()` |
-| Then（驗證） | `expect(response.status()).toBe()` / `expect(page.getByText()).toBeVisible()` |
+| AC 描述 | Playwright Test 實作 |
+|--------|---------------------|
+| 「已登入呼叫 POST /api/...，回 201」 | `expect((await request.post(API_PATHS.x, ...)).status()).toBe(201)` |
+| 「點擊送出按鈕，顯示 toast {TOAST.x}」 | `await page.locator(...).click(); await expect(page.getByText(TOAST.x)).toBeVisible()` |
+| 「未登入回 401」 | `expect((await request.post(...)).status()).toBe(401)` |
 
-#### playwright-bdd 核心範例
+#### 範例
 
 ```typescript
-import { createBdd } from 'playwright-bdd';
-const { Given, When, Then } = createBdd();
+import { test, expect } from '@playwright/test';
+import { TESTIDS, API_PATHS, TOAST } from '../../specs/contracts';
 
-Given('使用者已登入', async ({ page }) => {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill('test@example.com');
-  await page.getByRole('button', { name: /登入/ }).click();
-});
+test.describe('F-001 Resource', () => {
+  test('[Happy] 建立 resource 成功', async ({ request }) => {
+    const res = await request.post(API_PATHS.resourceCreate, {
+      data: { field_a: 'test' },
+    });
+    expect(res.status()).toBe(201);
+    expect((await res.json()).field_a).toBe('test');
+  });
 
-When('POST {string} with body:', async ({ request }, url, docString) => {
-  lastResponse = await request.post(url, { data: JSON.parse(docString) });
-});
-
-Then('response status should be {int}', async ({}, status) => {
-  expect(lastResponse.status()).toBe(status);
+  test('[Error] 未登入回 401', async ({ request }) => {
+    expect((await request.post(API_PATHS.resourceCreate)).status()).toBe(401);
+  });
 });
 ```
 
 #### Bug Issue 附截圖
 
-BDD scenario 失敗時，自動截圖並建立 bug issue（附 Gherkin 場景 + Playwright trace）：
+E2E test 失敗時，自動截圖並建立 bug issue（附失敗 test 名稱 + Playwright trace）：
 
 ```markdown
-## 失敗的 Gherkin Scenario
-Scenario: 建立 resource 成功
-  Given 使用者已登入
-  When POST /api/v1/resource ...
-  Then response status should be 201  ← FAILED
+## 失敗的 Test
+test: [Happy] 建立 resource 成功 (test/e2e/f001-resource.spec.ts)
 
 ## Screenshot
 ![Bug Screenshot](screenshot-url)
@@ -285,7 +282,7 @@ Scenario: 建立 resource 成功
 
 | 維度 | 檢查什麼 | 嚴重等級 |
 |------|---------|---------|
-| **Completeness** | 所有 spec 有實作？所有 .feature scenario 通過？ | CRITICAL |
+| **Completeness** | 所有 spec 有實作？所有 acceptance criteria 對應的 e2e test 通過？ | CRITICAL |
 | **Correctness** | API/error codes 符合 spec？business rules 實作？ | CRITICAL |
 | **Coherence** | 目錄結構、命名、error handling 一致？ | WARNING |
 
@@ -295,7 +292,7 @@ Scenario: 建立 resource 成功
 
 ### Source of Truth：`specs/` 目錄
 
-所有規格以 Markdown + Gherkin 檔案維護在 repo 中，是整個工作流的 single source of truth：
+所有規格以 Markdown 檔案維護在 repo 中，是整個工作流的 single source of truth：
 
 ```
 specs/
@@ -304,64 +301,66 @@ specs/
 ├── verify-sprint-{N}.md         # 驗證報告（verifier 產生）
 ├── logs/                        # Sprint 工作日誌
 │   └── sprint-{N}-log.md
+├── sprints/
+│   └── sprint-{N}.md            # 該 sprint 涵蓋的 feature ID 清單（決定 e2e scope）
 ├── features/
-│   ├── f001-{name}.md           # Feature spec（API contract, data model, rules）
-│   ├── f001-{name}.feature      # Gherkin 場景（可執行的接受標準）
+│   ├── f001-{name}.md           # Feature spec（API contract, data model, business rules, acceptance criteria）
 │   ├── f002-{name}.md
-│   ├── f002-{name}.feature
 │   └── ...
 └── changes/                     # Delta 變更（跨 sprint 修改既有功能）
     ├── sprint-2-changes.md
     └── archive/                 # 已歸檔的變更
 ```
 
-### Gherkin .feature 場景格式
+### Acceptance Criteria 格式
 
-每個功能附帶一個 `.feature` 檔案，使用標準 Gherkin 語法。**這些檔案既是 spec 也是可執行測試**：
+每個功能在 `specs/features/f{NNN}-{name}.md` 寫 acceptance criteria 條列：
 
-```gherkin
-@sprint-1 @f001
-Feature: F-001 Resource 管理
-  As a 已登入使用者
-  I want to 管理 resource
-  So that 我可以建立和查詢資源
+```markdown
+# F-001 Resource 管理
 
-  Background:
-    Given 使用者已登入且有有效 token
+## API Contract
+（POST /api/v1/resource — 完整 schema 略）
 
-  Scenario: 建立 resource 成功
-    When POST /api/v1/resource with body:
-      """json
-      { "field_a": "test", "field_b": 42 }
-      """
-    Then response status should be 201
-    And response body should contain:
-      | field   | value       |
-      | id      | any(string) |
-      | field_a | test        |
+## Data Model
+（Resource entity — 略）
 
-  Scenario Outline: field_a 長度邊界
-    When POST /api/v1/resource with field_a of length <length>
-    Then response status should be <status>
+## Business Rules
+（略）
 
-    Examples:
-      | length | status |
-      | 100    | 201    |
-      | 101    | 400    |
+## Acceptance Criteria
+
+### Happy Path
+- [ ] AC-1: 已登入使用者用合法 payload 呼叫 `POST /api/v1/resource` 回 201 + 帶 id 的物件
+- [ ] AC-2: 同使用者用 `GET /api/v1/resource/:id` 拿回剛建立的 resource
+
+### Error Handling
+- [ ] AC-3: 未登入呼叫 `POST` 回 401 / `UNAUTHORIZED`
+- [ ] AC-4: `field_a` 為空回 400 / `INVALID_INPUT`
+
+### Edge Cases
+- [ ] AC-5: `field_a` 100 字過、101 字拒
 ```
 
-QA 撰寫 step definitions（playwright-bdd），即可自動執行：
+QA 把每條 AC 轉成一個 Playwright `test()`：
 
 ```typescript
-import { createBdd } from 'playwright-bdd';
-const { Given, When, Then } = createBdd();
+import { test, expect } from '@playwright/test';
+import { API_PATHS } from '../../specs/contracts';
 
-When('POST {string} with body:', async ({ request }, url, docString) => {
-  lastResponse = await request.post(url, { data: JSON.parse(docString) });
+test('[Happy] AC-1 建立 resource 成功', async ({ request }) => {
+  const res = await request.post(API_PATHS.resourceCreate, {
+    data: { field_a: 'test', field_b: 42 },
+  });
+  expect(res.status()).toBe(201);
+  const body = await res.json();
+  expect(typeof body.id).toBe('string');
+  expect(body.field_a).toBe('test');
 });
 
-Then('response status should be {int}', async ({}, status) => {
-  expect(lastResponse.status()).toBe(status);
+test('[Edge] AC-5 field_a 邊界值', async ({ request }) => {
+  expect((await request.post(API_PATHS.resourceCreate, { data: { field_a: 'x'.repeat(100) } })).status()).toBe(201);
+  expect((await request.post(API_PATHS.resourceCreate, { data: { field_a: 'x'.repeat(101) } })).status()).toBe(400);
 });
 ```
 
@@ -582,7 +581,7 @@ UI Designer agent 的設計規則參考自 [UI/UX Pro Max](https://github.com/ne
 
 本專案的部分設計受到 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 啟發：
 
-- **Gherkin .feature 檔案** — 將接受標準結構化為可直接執行的 BDD 測試場景（Given/When/Then）
+- **Markdown acceptance criteria** — 將接受標準結構化為可直接轉成 Playwright e2e tests 的條列
 - **Delta 變更格式** — ADDED/MODIFIED/REMOVED 追蹤跨 sprint 的功能修改
 - **三維度驗證** — Completeness、Correctness、Coherence 確保交付品質
 - **本地 Spec 檔案** — repo 中的 `specs/` 目錄作為 source of truth

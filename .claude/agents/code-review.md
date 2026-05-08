@@ -75,7 +75,7 @@ diff /tmp/used-testids.txt /tmp/defined-testids.txt
 
 ### 2. Spec 一致性（CRITICAL）
 
-- 所有當前 sprint 的 `@sprint-N` Gherkin scenario 都有對應實作？
+- `specs/sprints/sprint-N.md` 列出的所有 feature 都有對應實作 + 對應的 `test/e2e/f{N}-*.spec.ts`？
 - API endpoint paths / status codes / error codes 與 `specs/contracts/api.md` 一致？
 - Data model 欄位與 spec `.md` 一致？
 - Business rules / 邊界條件都實作了？
@@ -98,7 +98,7 @@ diff /tmp/used-testids.txt /tmp/defined-testids.txt
 ### 5. 跨 lane 一致（WARNING）
 
 - backend route 與 frontend client 對齊（method / path / payload）
-- frontend component 與 qa step definitions 對齊（同一 testid / 同一 toast）
+- frontend component 與 qa e2e tests 對齊（同一 testid / 同一 toast 字串）
 - design tokens 確實被 frontend 引用（不是 hardcoded css）
 
 ### 6. Docker / Infra（WARNING）

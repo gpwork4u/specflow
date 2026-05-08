@@ -1,20 +1,19 @@
 ---
 name: specflow:qa
-description: 啟動 QA 撰寫 BDD step definitions。根據 Gherkin .feature 場景撰寫 playwright-bdd step definitions，與 engineer 同時進行，不需等實作完成。觸發關鍵字："qa", "測試", "test", "e2e", "bdd"。
+description: 啟動 QA 撰寫 Playwright e2e tests。根據 spec .md 中的 acceptance criteria 撰寫 Playwright 測試，與 engineer 同時進行。觸發關鍵字："qa", "測試", "test", "e2e"。
 user-invocable: true
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Agent
 argument-hint: "[sprint編號]"
 ---
 
-# QA BDD Test 撰寫流程（playwright-bdd）
+# QA E2E Test 撰寫流程（純 Playwright）
 
-QA 根據 `specs/features/*.feature` 的 Gherkin 場景撰寫 step definitions。
-使用 playwright-bdd 將 .feature 轉為原生 Playwright tests。
-與 engineer **同時啟動**，不需要等實作完成。
+QA 根據 `specs/features/*.md` 的 acceptance criteria 撰寫 Playwright e2e tests。
+**與 engineer 同時啟動**，不需要等實作完成（QA 只依賴 spec，不依賴實作）。
 
 ## 流程
 
-### 撰寫 Step Definitions（與 engineer 並行）
+### 撰寫 e2e tests（與 engineer 並行）
 
 啟動 qa-engineer agent：
 - `subagent_type: "qa-engineer"`
@@ -23,31 +22,35 @@ QA 根據 `specs/features/*.feature` 的 Gherkin 場景撰寫 step definitions�
 - 傳入當前 sprint milestone
 
 QA 會：
-1. 複製 `specs/features/*.feature` 到 `test/features/`
-2. 撰寫 step definitions（`test/steps/`）實作每個 Given/When/Then
-3. 設定 playwright-bdd config
-4. 發 step definitions PR
+1. 從 `specs/sprints/sprint-N.md` 取得當前 sprint 的 feature ID 清單
+2. 為每個 feature 建立 `test/e2e/f{N}-{name}.spec.ts`
+3. 把 spec .md 中每條 acceptance criterion 轉成一個 Playwright `test('[Happy/Error/Edge] {AC 描述}', ...)`
+4. 設定 `test/playwright.config.ts`
+5. 發 PR
 
-### 執行驗證（engineer 完成後）
+### 執行測試（sprint 收斂時，orchestrator 跑）
 
-所有 engineer PR 合併後，QA 執行 BDD 測試：
-- `npx bddgen` 生成 Playwright tests
-- `npx playwright test` 執行所有場景
-- 全部通過 → 在 feature issues 留言確認
-- 有失敗 → 建立 bug issue（附截圖 + Gherkin 場景）
+所有 4 lane drain 完畢後，orchestrator 跑：
 
-### Bug 修復迴圈
+```bash
+SPRINT="Sprint N" bash .claude/scripts/local-checks.sh e2e
+```
 
-bug issue 建立後自動啟動 engineer agent 背景修復，修復後 QA 重新驗證。
+- 全綠 → state.sprint_test_outcome=success → verifier 接手
+- 有失敗 → 建立 bug issue（附截圖 + 失敗 test 名稱）→ engineer 修 → 重跑
 
 ## 產出
 
-- Step definitions PR（`test/steps/` + `test/support/`）
-- Cucumber JSON + HTML 測試報告
-- Bug issues（如有，附截圖 + 失敗場景）
+- e2e tests PR（`test/e2e/*.spec.ts` + `test/support/`）
+- Playwright JSON + HTML 測試報告
+- Bug issues（如有，附截圖 + 失敗 test 名稱）
 
 ## 重要
 
-- **Feature 檔案是 source of truth** — QA 不修改 .feature 內容，只實作 step definitions
-- QA 只依賴 spec .feature + .md，不依賴 engineer 實作
-- 如果 .feature 場景不夠明確，QA 會在 feature issue 上提問
+- **Spec acceptance criteria 是 source of truth** — QA 不修改 spec，只把 AC 轉成可執行 tests
+- QA 只依賴 spec .md，不依賴 engineer 實作
+- 如果 AC 不夠明確，QA 在 feature issue 上提問
+- **只實作當前 sprint scope，不能多做**：未來 sprint 的 feature 不要預寫 e2e test
+- **不擴充驗證**：spec AC 寫什麼就驗什麼，不順手加 assertion
+- 失敗自動截圖（`screenshot: 'only-on-failure'`）
+- Selector / API path / 字串都從 `specs/contracts.ts` import，禁止 hardcoded

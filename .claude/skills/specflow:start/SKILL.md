@@ -67,7 +67,7 @@ AskUserQuestion({
 spec-writer 產出：
 - `specs/design-source.md` — Claude design URL 的 fetch 快照（如有）
 - `specs/` 目錄下的 spec 檔案（source of truth）
-- `specs/features/*.feature` — Gherkin 場景（可執行的接受標準）
+- `specs/features/*.md` 中的 acceptance criteria（QA 轉成 Playwright e2e tests）
 - Epic Issue + Sprint Issues
 - Sprint Milestones
 
@@ -81,7 +81,7 @@ tech-lead：
 1. **上網 survey 技術選型**（WebSearch + WebFetch），產出 `specs/tech-survey.md`
 2. **產出 Contract 三件套**（hard gate）— `specs/contracts/api.md` + `dom.md` + `ux-text.md` + `specs/contracts.ts`，作為 lane 之間的 single source of truth
 3. 讀取 `specs/` 目錄，自動分析依賴圖譜，產出 `specs/dependencies.md`（含 contract owner 標記）
-4. 驗證 .feature 檔頭都有 `@sprint-N` tag（hard gate）
+4. 驗證 specs/sprints/sprint-N.md 存在且列出 feature ID（hard gate）
 5. 建立 feature issues（含 scenarios + 實作指引 + 技術選型 + contract reference）
 6. 建立 QA issue（含 scenarios 清單 + contract reference）
 7. 建立 design issue — **僅在 `specs/design-source.md` 存在時建**：要求 ui-designer 從 design URL 抽 tokens / 元件 / 字串到 `design/`，產出 handoff 給 tech-lead 在 contract phase 吸進 contracts/。純 backend 專案則不開 design issue。
@@ -171,7 +171,7 @@ Branch protection 配合改成只要 `build-and-lint` 過、不再要求 approva
 AskUserQuestion({
   questions: [
     {
-      question: "Sprint {N} 的 BDD 測試準備開始，測試環境怎麼處理？",
+      question: "Sprint {N} 的 e2e 測試準備開始，測試環境怎麼處理？",
       header: "Infra",
       multiSelect: false,
       options: [
@@ -212,9 +212,9 @@ AskUserQuestion({
 
 **如果使用者選了自訂 URL（Other）**，將 BASE_URL 傳入 QA agent。
 
-### Phase 5：Sprint BDD 測試（本地執行，orchestrator 跑）
+### Phase 5：Sprint e2e 測試（本地執行，orchestrator 跑）
 
-**BDD 不在 CI 上跑** — playwright + docker compose 在 GitHub Actions 上慢、易超時、port 衝突；改在 orchestrator 的本地環境跑（使用者的機器或 self-hosted runner）。
+**e2e 不在 CI 上跑** — playwright + docker compose 在 GitHub Actions 上慢、易超時、port 衝突；改在 orchestrator 的本地環境跑（使用者的機器或 self-hosted runner）。
 
 ```bash
 SPRINT="{current_sprint}"
@@ -231,21 +231,20 @@ for LABEL in feature design qa bug; do
 done
 
 # 2. 確認本機 docker / node 已就緒（doctor.sh 已在 phase 0 跑過，這裡只做最終確認）
-docker compose version >/dev/null 2>&1 || { echo "🔴 docker compose 不在，無法跑 BDD"; exit 1; }
+docker compose version >/dev/null 2>&1 || { echo "🔴 docker compose 不在，無法跑 e2e"; exit 1; }
 
-# 3. 跑 BDD（限定 @sprint-N scope）
-SPRINT_TAG="@sprint-${SPRINT_NUM}" \
+# 3. 跑 e2e（從 specs/sprints/sprint-N.md 取 scope）
 BASE_URL="${BASE_URL:-http://localhost:3000}" \
   bash .claude/scripts/run-sprint-tests.sh all
 OUTCOME=$?
 
-# 4. 寫結果到 state.json，BDD 過 → 進 sprint review；BDD 失敗 → 建 bug 重啟 lane
+# 4. 寫結果到 state.json，e2e 過 → 進 sprint review；e2e 失敗 → 建 bug 重啟 lane
 if [ "$OUTCOME" = "0" ]; then
   bash .claude/scripts/state.sh set sprint_test_outcome '"success"'
   bash .claude/scripts/state.sh phase "phase-5.5-review" "啟動 sprint code review"
 else
   bash .claude/scripts/state.sh set sprint_test_outcome '"failure"'
-  bash .claude/scripts/state.sh phase "phase-5-bdd" "BDD 失敗，建 bug issue"
+  bash .claude/scripts/state.sh phase "phase-5-e2e" "e2e 失敗，建 bug issue"
 fi
 ```
 
@@ -253,54 +252,56 @@ fi
 
 ```bash
 if [ "$OUTCOME" != "0" ]; then
-  # 從 cucumber JSON 抽失敗 scenario
+  # 從 playwright JSON 抽失敗 test
   FAILED=$(jq -r '
-    [.[].elements[] | select(.steps | any(.result.status == "failed"))]
-    | map("- \(.name) (\(.tags[0].name // "no-tag"))") | join("\n")
-  ' test/reports/cucumber-report.json 2>/dev/null || echo "(無法解析 report)")
+    [.suites[]?.specs[]? | select(.tests[]?.results[]?.status == "failed")
+      | {title, file}]
+    | map("- \(.title) (\(.file))") | join("\n")
+  ' test/reports/playwright.json 2>/dev/null || echo "(無法解析 report)")
 
-  # 從 tag 推 lane（@backend / @frontend / @pipeline），預設 backend
-  LANE=$(echo "$FAILED" | grep -oE '@(backend|frontend|pipeline)' | head -1 | tr -d '@')
-  LANE="${LANE:-backend}"
+  # 從失敗檔案路徑推 lane（test/e2e/fNNN- 對應的 feature lane 由 sprint plan 決定）
+  # 簡化：預設 backend；frontend 可從 playwright trace 的 page interaction 判斷
+  LANE="backend"
+  echo "$FAILED" | grep -qiE 'page\.|locator|getBy' && LANE="frontend"
 
   gh issue create \
-    --title "🐛 [Bug] Sprint $SPRINT BDD failed" \
+    --title "🐛 [Bug] Sprint $SPRINT e2e failed" \
     --label "bug,$LANE" \
     --milestone "$SPRINT" \
-    --body "本地 BDD 測試失敗（@sprint-${SPRINT_NUM}）
+    --body "本地 e2e 測試失敗
 
-### 失敗的 Scenario
+### 失敗的 Test
 $FAILED
 
 ### 報告
-\`test/reports/cucumber-report.json\` + \`test/screenshots/\`
+\`test/reports/playwright.json\` + \`test/screenshots/\`
 
 ### 修復流程
-Engineer 修完 PR merge → 關此 bug → orchestrator 自動回到 Phase 5 重跑 BDD"
+Engineer 修完 PR merge → 關此 bug → orchestrator 自動回到 Phase 5 重跑 e2e"
 fi
 ```
 
 - `success` → 進入 Phase 5.5 verifier
-- `failure` → 自動建 bug issue（4 lane 重新打破平衡） → engineer lane 重啟 → drain → 回到 Phase 5 重跑 BDD
+- `failure` → 自動建 bug issue（4 lane 重新打破平衡） → engineer lane 重啟 → drain → 回到 Phase 5 重跑 e2e
 
-#### 為什麼 BDD 不上 CI
+#### 為什麼 e2e 不上 CI
 
 1. **本地 docker compose 比 CI 快** — image cache、不用每次 cold-pull
 2. **port 衝突風險** — CI 上 Playwright + docker compose 容易 race
 3. **可重現** — 出錯時使用者機器上直接 `npx playwright show-trace` 看 trace
 4. **省 CI 分鐘** — sprint 收斂頻率不高（每次 sprint 結束 1 次），不需要每次 PR 都跑
 
-CI 只負責**輕量 gate**（unit / lint / contract-check / bddgen 0 undefined），重量級 e2e 留在本地。
+CI 只負責**輕量 gate**（unit / lint / contract-check），重量級 e2e 留在本地。
 
 **每輪重測前再次確認環境**：
 ```javascript
 AskUserQuestion({
   questions: [{
-    question: "Bug 已修復，要重新執行 BDD 測試嗎？",
+    question: "Bug 已修復，要重新執行 e2e 測試嗎？",
     header: "重測",
     multiSelect: false,
     options: [
-      { label: "重新測試 (Recommended)", description: "重新啟動服務並執行所有 BDD scenarios" },
+      { label: "重新測試 (Recommended)", description: "重新啟動服務並執行所有 e2e tests" },
       { label: "只測失敗的", description: "只重跑上次失敗的 scenarios" },
       { label: "暫停", description: "我需要先手動檢查，稍後再測" }
     ]
@@ -310,7 +311,7 @@ AskUserQuestion({
 
 ### Phase 5.5：Sprint Code Review（背景自動，一次性全面審查）
 
-BDD 全綠後啟動 code-review agent 對**整個 sprint diff** 做一次全面 review：
+e2e 全綠後啟動 code-review agent 對**整個 sprint diff** 做一次全面 review：
 
 ```
 Agent(subagent_type="code-review", run_in_background=true,
@@ -319,7 +320,7 @@ Agent(subagent_type="code-review", run_in_background=true,
 
 Code reviewer 檢查：
 - **Contract 對齊（CRITICAL）**：testid / API path / toast 三邊是否一致
-- **Spec 一致性（CRITICAL）**：實作是否覆蓋所有 @sprint-N scenario
+- **Spec 一致性（CRITICAL）**：實作是否覆蓋所有當前 sprint feature 的 acceptance criteria
 - **安全性（CRITICAL）**：injection / 認證 / 敏感資料
 - **Code 品質（WARNING）**：命名、重複邏輯、error handling
 - **跨 lane 一致（WARNING）**：backend/frontend/qa 對接點
@@ -327,7 +328,7 @@ Code reviewer 檢查：
 
 結果：
 - **PASS / WARNING** → 進入 Phase 5.6 verifier
-- **FAIL（有 CRITICAL）** → 對每個 CRITICAL 建 bug issue（自動推 lane）→ engineer 修 → 重跑 BDD → 重 review
+- **FAIL（有 CRITICAL）** → 對每個 CRITICAL 建 bug issue（自動推 lane）→ engineer 修 → 重跑 e2e → 重 review
 - 報告寫到 `specs/logs/sprint-{N}-review.md`
 
 ### Phase 5.6：三維度驗證（背景自動）
@@ -361,9 +362,9 @@ Verifier 檢查：
 📊 摘要：
 Features: X | PRs: X | Bugs fixed: X
 
-🧪 BDD 測試結果（docker compose 環境）：
+🧪 E2E 測試結果（docker compose 環境）：
   Unit Tests: X passed
-  BDD Scenarios: X/Y passed (playwright-bdd)
+  E2E Tests: X/Y passed (Playwright)
 
 ✅ Verify: PASS（Completeness + Correctness + Coherence）
 

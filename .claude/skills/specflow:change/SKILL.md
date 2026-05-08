@@ -8,7 +8,7 @@ argument-hint: "[變更描述]"
 
 # Change Request 流程（專案完成後新增需求）
 
-當專案已 release 但需要新增/修改功能時，用這個流程。**不是改 spec 重來**，而是把變更當作新的迭代層疊上去，並透過既有 .feature 自動形成回歸測試。
+當專案已 release 但需要新增/修改功能時，用這個流程。**不是改 spec 重來**，而是把變更當作新的迭代層疊上去，並透過既有 e2e tests 自動形成回歸測試。
 
 ## 何時使用
 
@@ -46,12 +46,12 @@ Agent(subagent_type="spec-writer", run_in_background=false)
 
     請執行：
     1. 讀取 specs/ 既有規格，找出受影響的 features
-    2. 評估影響範圍：哪些 .feature 場景需要新增/修改？哪些既有 scenario 變成回歸測試？
+    2. 評估影響範圍：哪些 acceptance criteria 需要新增/修改？哪些既有 e2e tests 變成回歸測試？
     3. 用 AskUserQuestion 與使用者確認需求細節（含 backwards compatibility 取捨）
     4. 產出 specs/changes/$CR_ID.md，包含：
        - 變更描述
        - 影響的 Features（清單）
-       - 新增的 .feature scenarios（直接 append 到對應的 specs/features/F-XXX.feature，不刪除既有 scenario）
+       - 新增的 acceptance criteria（append 到對應的 specs/features/F-XXX.md，不刪除既有 AC）
        - 回歸風險評估
        - 拆分為 sprint 的計畫（如果 CR 大的話可分多個 sprint）
     5. 為這個 CR 建立 GitHub Milestone "Sprint N+1: $CR_ID"（N = 目前最大 sprint 編號）
@@ -73,16 +73,16 @@ Agent(subagent_type="tech-lead", run_in_background=true)
 
 之後 Phase 4-7 與 `specflow:start` 完全相同。
 
-## 既有 .feature 的處理規則
+## 既有 acceptance criteria 的處理規則
 
-- **新增 scenario** → append 到既有 F-XXX.feature 檔尾。既有 scenario 保留 = 自動回歸測試
-- **修改既有行為** → 在 .feature 加新的 Scenario，描述新行為；舊的 scenario 如果不再合法，**標記 `@deprecated` tag**（不刪除，保留歷史可追溯），並在 spec changelog 註明
+- **新增 AC** → append 到既有 F-XXX.md 檔尾。既有 AC 保留 = 自動回歸測試
+- **修改既有行為** → 在 .md 加新的 AC，描述新行為；舊的 AC 如果不再合法，**用刪除線 `~~AC-X~~` 標記 + comment 註明原因**（不刪除，保留歷史可追溯），並在 spec changelog 註明
 - **完全移除功能** → 移到 `specs/features/archive/`，並在 CR 文件記載原因
 
 ## 為什麼這樣設計
 
-- **Source of truth 仍是 specs/features/*.feature**，CR 文件只是 changelog
-- **既有 scenario 不刪 = 回歸測試自動覆蓋**，BDD coverage check 會抓到回歸破壞
+- **Source of truth 仍是 specs/features/*.md**，CR 文件只是 changelog
+- **既有 AC 不刪 = QA 不會刪對應 e2e test = 回歸測試自動覆蓋
 - **沿用 sprint 流程**，無需學新工具或新概念
 - **可累積**：CR-001、CR-002... 一路加上去，每個都是獨立可驗證的迭代
 

@@ -17,9 +17,9 @@
 | **tech-lead** | 技術 survey + Contract 三件套 + 開 issue 分配工作 | `specs/` | tech-survey.md + contracts/ + Feature/QA/Design issues | opus |
 | **ui-designer** | 從 Claude design URL 抽 design tokens + 元件 + 字串清單（不從零設計） | `design/` | Design tokens + 元件 handoff + 字串 handoff | sonnet |
 | **engineer** | 認領 feature / bug，寫程式 + unit test（分 backend / frontend / pipeline 三個 lane，每 lane 1 個）| `dev/` | PR（Closes #issue） | sonnet |
-| **qa-engineer** | 認領 QA issue，撰寫 playwright-bdd step definitions | `test/` | Step Definitions PR + Bug issues（附截圖） | sonnet |
+| **qa-engineer** | 認領 QA issue，撰寫 Playwright e2e tests（純 Playwright，無 BDD） | `test/` | e2e tests PR + Bug issues（附截圖） | sonnet |
 | **code-review** | Sprint 結束時對整個 sprint 做一次全面審查（contract 對齊 / spec 一致性 / 安全性 / 跨 lane） | 唯讀 | `sprint-N-review.md` + CRITICAL bug issues | sonnet |
-| **verifier** | 三維度驗證（以 .feature + Cucumber report 為基準） | `specs/` | 驗證報告 | sonnet |
+| **verifier** | 三維度驗證（以 spec acceptance criteria + Playwright report 為基準） | `specs/` | 驗證報告 | sonnet |
 
 > **Model 配置原則**：spec-writer 與 tech-lead 用 opus（前者要互動釐清需求、後者要做技術選型與架構決策，影響整個 sprint 的方向）；engineer 寫程式、qa 寫測試、ui-designer、verifier、code-review 用 sonnet（已有清楚 spec/scenario 可循的結構化工作）。整體 token 成本約節省 60-65%。
 
@@ -35,14 +35,13 @@ project/
 ├── dev/              ← 🔧 Engineer 專屬（程式碼 + unit tests）
 │   ├── src/
 │   └── __tests__/
-├── test/             ← 🧪 QA 專屬（playwright-bdd BDD tests）
-│   ├── features/          ← .feature 檔案（從 specs/ 複製）
-│   ├── steps/             ← Step definitions（Given/When/Then 實作）
+├── test/             ← 🧪 QA 專屬（純 Playwright e2e tests）
+│   ├── e2e/               ← Playwright .spec.ts（檔名 fNNN-*.spec.ts 對應 feature）
 │   ├── support/           ← Hooks, fixtures, helpers
 │   ├── playwright.config.ts
 │   ├── screenshots/
 │   └── reports/
-├── specs/            ← 📖 Spec + Tech Survey + Gherkin 場景 + Contracts
+├── specs/            ← 📖 Spec + Tech Survey + Acceptance Criteria + Contracts
 │   ├── design-source.md   ← 🎨 元數據（URL + last-synced timestamp）
 │   ├── design-source/     ← 🎨 本地 design 快照（sync-design.sh 下載）
 │   │   ├── index.html         ← design HTML 全文
@@ -50,7 +49,8 @@ project/
 │   │   └── assets/            ← 圖片 / icon
 │   ├── overview.md
 │   ├── tech-survey.md
-│   ├── features/          ← .md（API contract）+ .feature（Gherkin 場景）
+│   ├── sprints/           ← 每個 sprint 的 feature ID 清單（決定 e2e scope）
+│   ├── features/          ← .md（API contract + data model + acceptance criteria）
 │   ├── contracts/         ← 🔒 Single source of truth (tech-lead 維護)
 │   │   ├── api.md         ← path / method / schema
 │   │   ├── dom.md         ← testid / selector（從 design-source 抽出）
@@ -88,8 +88,8 @@ project/
   │                       ▼
   │                 4 lane drain（feature/design/qa/bug 全關）
   │                       ▼
-  │                 Sprint BDD 測試（本地跑，不在 CI）
-  │                 docker compose up → playwright-bdd → cucumber report
+  │                 Sprint e2e 測試（本地跑，不在 CI）
+  │                 docker compose up → playwright → playwright report
   │                       │
   │              ┌─ 失敗 → bug issue（附截圖）→ 修復 → 重測 ─┐
   │              └─ 通過 ↓                                   │
@@ -182,12 +182,12 @@ Epic #1（索引 + 需求）
 ## Change Request（已完成專案的新需求）
 
 Release 後若要新增/修改功能：
-- `/specflow:change [描述]` — spec-writer 評估影響、append 新 scenario 到既有 .feature（既有 scenario 自動變回歸測試）、建立新 sprint milestone，後續走標準流程
-- 既有 scenario 不刪，要 deprecate 用 `@deprecated` Gherkin tag 標記
+- `/specflow:change [描述]` — spec-writer 評估影響、append 新 AC 到既有 spec .md（既有 AC 對應的 e2e tests 自動變回歸測試）、建立新 sprint milestone，後續走標準流程
+- 既有 AC 不刪，要 deprecate 用刪除線 `~~AC-X~~` + comment 標記
 
-## 自動測試（BDD 驅動）
+## 自動測試（純 Playwright，無 BDD）
 
-Spec-writer 產出 Gherkin `.feature` 檔案 → QA 撰寫 step definitions → playwright-bdd 將場景轉為 Playwright tests。
+Spec-writer 在 `specs/features/*.md` 寫 acceptance criteria 條列 → QA 把每條 AC 轉成一個 Playwright `test()` 寫在 `test/e2e/fNNN-*.spec.ts`。
 
 **所有 test 都在本地跑，CI 只做 build + lint。**
 
@@ -195,9 +195,9 @@ Spec-writer 產出 Gherkin `.feature` 檔案 → QA 撰寫 step definitions → 
 
 `pr-test.yml` 唯一 job 是 **build-and-lint**：
 - `dev/` 能 `tsc --noEmit` / `npm run build` / `go build ./...` 過
-- `test/` 能 `tsc --noEmit` 過（step definitions 也是 TS）
+- `test/` 能 `tsc --noEmit` 過（e2e .spec.ts 也是 TS）
 - linter 沒紅
-- **不跑** unit tests / contract-check / bddgen / BDD scenario
+- **不跑** unit tests / contract-check / e2e
 
 CI 只擋「連編譯都過不了」的 PR。
 
@@ -206,38 +206,38 @@ CI 只擋「連編譯都過不了」的 PR。
 `bash .claude/scripts/local-checks.sh`（engineer / qa agent 在 push 前的強制 gate）：
 - `unit` — `dev/` 的 unit tests
 - `contract` — grep-based hardcoded testid / api / toast 文字檢查
-- `bdd-gate` — 當前 sprint 範圍的 `bddgen --list-undefined = 0`
 
 任一失敗，agent 不准 push（PR 也就不會進到 CI）。
 
-### Sprint 收斂時的完整 BDD（orchestrator 跑）
+### Sprint 收斂時的完整 e2e（orchestrator 跑）
 
-`SPRINT_TAG=@sprint-N bash .claude/scripts/local-checks.sh bdd`
+`SPRINT="Sprint N" bash .claude/scripts/local-checks.sh e2e`
 - 4 lane 全關後 orchestrator 自動觸發
-- docker compose up + playwright + cucumber report
+- docker compose up + playwright + playwright report
+- Sprint scope 從 `specs/sprints/sprint-N.md` 列出的 feature ID → `test/e2e/fNNN-*.spec.ts`
 - 結果寫到 `state.json.sprint_test_outcome`，verifier 讀 state.json hard-gate
 
 ### 測試完自動清理
 
 每次 `run-sprint-tests.sh` 結束（trap EXIT）：
-- **成功** → `docker compose down -v --remove-orphans` + 清 `test/features` `test-results` `screenshots`（reports 留給 verifier）
+- **成功** → `docker compose down -v --remove-orphans` + 清 `test/test-results` `screenshots`（reports 留給 verifier）
 - **失敗** → 只關 docker；保留 `test-results` `screenshots` `reports` 給人類 debug
 
 `verifier` PASS 後：
-- 把 `test/reports/cucumber-report.{json,html}` archive 到 `specs/logs/sprint-N-artifacts/`（入版控做歷史追溯）
+- 把 `test/reports/playwright.{json,playwright-report/}` archive 到 `specs/logs/sprint-N-artifacts/`（入版控做歷史追溯）
 - 跑 `local-checks.sh cleanup` 把 `test/` 全清，下個 sprint 從乾淨狀態起跑
 
 手動清理：`bash .claude/scripts/local-checks.sh cleanup` — 把所有測試暫存（含 reports）歸零，docker 一併下架。debug 完不想留就跑這個。
 
 ### Sprint scope 規則
 
-spec-writer 在 `.feature` 檔頭加 `@sprint-N` tag，這是強制規則。沒打 tag = 未排入 sprint = 任何階段都不會碰。
+spec-writer 在 `specs/sprints/sprint-N.md` 列出該 sprint 涵蓋的 feature ID。沒列到的 feature 在 sprint-test 不會跑。
 
-QA 寫 step definitions **只實作當前 sprint scope，不能多做**：
-- 只同步檔頭含 `@sprint-N` 的 .feature
-- 不為未來 sprint 預寫 step
-- 不自行擴充 .feature 沒寫的驗證項目
-- 共用步驟只放當前 sprint 已用到的
+QA 寫 e2e tests **只實作當前 sprint scope，不能多做**：
+- 只為 `specs/sprints/sprint-N.md` 列出的 feature 建立 `test/e2e/fNNN-*.spec.ts`
+- 不為未來 sprint 預寫 e2e
+- 不自行擴充 spec 沒寫的驗證項目
+- support helpers 只放當前 sprint 已用到的
 
 ## Contract 三件套（避免 lane 之間互不對齊）
 
@@ -255,34 +255,36 @@ QA 寫 step definitions **只實作當前 sprint scope，不能多做**：
 4. PR 時 `.claude/scripts/contract-check.sh` 會 grep diff 阻擋違規
 5. **跨 lane endpoint 必須拆獨立 issue**（如 `WS-Refactor backend` 先做 + `WS-Refactor frontend` 後做），不允許混合 lane
 
-**好處**：任一方改名 → TS 編譯失敗或 contract-check 紅燈，不會等到 BDD run 才發現「frontend 用 `userCard`、qa 找 `user-card`」這種對不上的問題。
+**好處**：任一方改名 → TS 編譯失敗或 contract-check 紅燈，不會等到 e2e run 才發現「frontend 用 `userCard`、qa 找 `user-card`」這種對不上的問題。
 
 **驗證閘門順序（不可跳級）**：
 ```
-QA step definitions 完整 (bddgen 0 undefined)
-  ↓ 通過 pr-test.yml 才能 merge
+本地 local-checks.sh（unit + contract）通過
+  ↓ push → CI build-and-lint 過 → auto-merge
 四 lane 全關（feature/design/qa/bug）
-  ↓ 觸發 sprint-test.yml 跑完整 BDD
-sprint-test 全綠
-  ↓ verifier 才會啟動三維度驗證
+  ↓ orchestrator 跑 local-checks.sh e2e
+e2e 全綠 → state.sprint_test_outcome=success
+  ↓ sprint code review（一次性全面審查）
+review PASS
+  ↓ verifier 三維度驗證
 verifier PASS
   ↓ 自動產出 sprint log，可進 release
 ```
 
-verifier 啟動前會先檢查最近一次 sprint-test workflow run 是 success，否則直接 short-circuit 並提示「修 BDD 再來」。
+verifier 啟動前會先檢查 `state.json.sprint_test_outcome == "success"`，否則直接 short-circuit 並提示「修 e2e 再來」。
 
-**本機與 CI 共用同一份腳本** `.claude/scripts/run-sprint-tests.sh`：
-- 啟動 docker → unit tests → 同步 .feature → bddgen → playwright test → coverage check
+**本地測試腳本** `.claude/scripts/run-sprint-tests.sh`：
+- 啟動 docker → unit tests → 從 sprint plan 解析 scope → playwright test → 結果摘要
 - 環境變數 `SKIP_DOCKER=1` 可跳過 docker（服務已在跑時用）
-- 任一階段失敗 exit 非 0，不再 `continue-on-error` 讓 PR 假性通過
+- `SPRINT="Sprint N"` 決定要跑哪些 e2e（從 specs/sprints/sprint-N.md 讀 feature ID）
+- 任一階段失敗 exit 非 0
 
-**每個 sprint 結束時，.feature 檔案中的所有場景都必須通過 = 功能驗證完成。**
+**每個 sprint 結束時，sprint scope 內的 acceptance criteria 對應的 e2e tests 全部通過 = 功能驗證完成。**
 
 ## 前置工具
 
-- [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) — 本地部署 + CI 測試
+- [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) — 本地部署 + 測試環境
 - [Playwright](https://playwright.dev/) — `npm install -D @playwright/test && npx playwright install`
-- [playwright-bdd](https://vitalets.github.io/playwright-bdd/) — `npm install -D playwright-bdd @cucumber/cucumber`
 
 ## 語言
 

@@ -8,8 +8,8 @@ maxTurns: 35
 
 你是一位資深的 Tech Lead。你的核心職責：
 1. **技術 Survey** — 上網調查、比較技術方案，產出架構決策報告
-2. 為 engineer 開 **feature issues**（含 .feature 場景 + 實作指引）
-3. 為 qa-engineer 開 **QA issues**（含 .feature 檔案清單 + step definition 指引）
+2. 為 engineer 開 **feature issues**（含 acceptance criteria + 實作指引）
+3. 為 qa-engineer 開 **QA issues**（含當前 sprint feature 清單 + Playwright e2e 指引）
 4. 為 ui-designer 開 **UI Design issue**（含設計範圍和元件清單）
 5. **自動分析依賴圖譜**，決定並行策略
 
@@ -35,36 +35,26 @@ maxTurns: 35
 ```bash
 cat specs/overview.md
 cat specs/features/f*.md
-cat specs/features/f*.feature
+cat specs/sprints/sprint-*.md   # 當前 sprint 的 feature ID 清單
 gh issue list --label "spec,epic" --state open --json number,title,body
 gh issue list --label "sprint" --milestone "{current_sprint}" --state open --json number,title,body
 ```
 
-### 第一步補充：驗證 sprint scope tags（hard gate）
+### 第一步補充：驗證 sprint scope（hard gate）
 
-在開 feature/qa issue 前，**先驗證當前 sprint 範圍的 .feature 都有正確 `@sprint-N` 檔頭 tag**。沒有 tag 的 .feature 在 sprint-test 不會被執行 → 等於該 feature 沒被驗證。如果有遺漏，先 push spec-writer 補完，不要直接開 issue。
+在開 feature/qa issue 前，**先驗證 `specs/sprints/sprint-${N}.md` 存在且列出該 sprint 的 feature ID 清單**。沒列到的 feature 在 sprint-test 不會跑 → 等於該 feature 沒被驗證。
 
 ```bash
-SPRINT_NUM={current_sprint_num}   # e.g. 1
-SPRINT_TAG="@sprint-${SPRINT_NUM}"
+SPRINT_NUM={current_sprint_num}
+PLAN="specs/sprints/sprint-${SPRINT_NUM}.md"
+[ ! -f "$PLAN" ] && { echo "🔴 $PLAN 不存在，找 spec-writer 補完"; exit 1; }
 
-# 從 spec-writer 的「Sprint 規劃表」抽出當前 sprint 應該包含的 feature 清單
-# （在 specs/overview.md 或 spec-writer 產出的 sprint plan）
-
-# 對該 sprint 的每個 .feature 檢查：檔頭 Feature: 上方有 @sprint-N tag
-MISSING=""
-for f in {sprint scope 內的 .feature 檔}; do
-  if ! grep -qE "^[[:space:]]*${SPRINT_TAG}\b" "$f"; then
-    MISSING="$MISSING $f"
-  fi
+# 確認 plan 列出的每個 feature 都有對應的 .md
+FIDS=$(grep -oE '[Ff]-?[0-9]{3}' "$PLAN" | tr '[:upper:]' '[:lower:]' | tr -d '-' | sort -u)
+for fid in $FIDS; do
+  ls specs/features/${fid}*.md > /dev/null 2>&1 || { echo "🔴 $fid 在 sprint plan 但找不到 spec .md"; exit 1; }
 done
-
-if [ -n "$MISSING" ]; then
-  echo "🔴 以下 .feature 缺 ${SPRINT_TAG} 檔頭 tag，sprint-test 不會跑到："
-  echo "$MISSING"
-  echo "請通知 spec-writer 補完再繼續。"
-  exit 1
-fi
+echo "✅ Sprint $SPRINT_NUM scope: $FIDS"
 ```
 
 ### 第二步：技術 Survey（上網調查）
@@ -168,7 +158,7 @@ cat specs/infra.md
 specs/contracts/
 ├── api.md         ← path / method / request schema / response schema / error codes
 ├── dom.md         ← 每個 testid 名稱 + 出現位置（哪個 component/page）+ selector 慣例
-└── ux-text.md     ← 每個 toast / label / button 文字（spec-writer 已寫進 .feature 的也要在這對齊）
+└── ux-text.md     ← 每個 toast / label / button 文字（spec-writer AC 中的 placeholder 在這對齊）
 specs/contracts.ts ← 上述三個檔案的 TS export，frontend / backend / qa 共同 import
 ```
 
@@ -285,10 +275,13 @@ fetch(API_PATHS.sentList);
 ```
 
 ```typescript
-// playwright-bdd step
-import { TESTIDS, TOAST } from '../../specs/contracts';
-await page.locator(`[data-testid="${TESTIDS.sentRecordCardApproveBtn}"]`).click();
-await expect(page.getByText(TOAST.approveSent)).toBeVisible();
+// QA playwright e2e (test/e2e/f001-*.spec.ts)
+import { TESTIDS, TOAST, API_PATHS } from '../../specs/contracts';
+import { test, expect } from '@playwright/test';
+test('approve sent record', async ({ page }) => {
+  await page.locator(`[data-testid="${TESTIDS.sentRecordCardApproveBtn}"]`).click();
+  await expect(page.getByText(TOAST.approveSent)).toBeVisible();
+});
 ```
 
 ```go
@@ -297,7 +290,7 @@ const SentListPath = "/api/sent"
 mux.HandleFunc("GET " + SentListPath, handleSentList)
 ```
 
-任一方改名 → TS 編譯失敗 / Go const 不對齊（pre-commit hook 偵測），不會等到 BDD run 才發現。
+任一方改名 → TS 編譯失敗 / Go const 不對齊（contract-check.sh 偵測），不會等到 e2e run 才發現。
 
 #### Hard gate
 
@@ -385,7 +378,7 @@ F-004 (Product Model)  ── 無依賴
 |----------|-----------|-------------|
 | api.md §1 (Sent records) | backend | 先發 backend PR 改 api.md + 實作 → merge → frontend / qa 才能 follow |
 | dom.md §SentRecordCard   | frontend | frontend 改 → qa 跟著改 step 引用 |
-| ux-text.md §Toast        | frontend | spec-writer 同步改 .feature 中的字串 assertion |
+| ux-text.md §Toast        | frontend | spec-writer 同步改 spec .md 中 AC 的字串 assertion |
 ```
 
 ```bash
@@ -401,8 +394,7 @@ gh issue create \
 As a {角色}, I want {功能}, so that {價值}
 
 ## Spec 檔案
-- API Contract + Data Model：`specs/features/f{N}-{name}.md`
-- Gherkin Scenarios：`specs/features/f{N}-{name}.feature`
+- API Contract + Data Model + Acceptance Criteria：`specs/features/f{N}-{name}.md`
 
 ## 技術選型
 見 `specs/tech-survey.md`
@@ -427,12 +419,8 @@ As a {角色}, I want {功能}, so that {價值}
 ## Data Model
 （從 spec .md 複製）
 
-## Gherkin Scenarios
-（從 .feature 複製完整 Given/When/Then 場景）
-
-```gherkin
-# 完整場景見 specs/features/f{N}-{name}.feature
-```
+## Acceptance Criteria
+（從 spec .md 複製 AC 條列；engineer 確認每條 AC 都有對應實作，QA 會把每條 AC 轉成一個 Playwright `test()`）
 
 ## 實作指引
 
@@ -522,35 +510,33 @@ gh issue create \
 ## QA BDD Test - Sprint {N}
 
 ### 測試框架
-playwright-bdd（Cucumber Gherkin + Playwright）
+純 Playwright（@playwright/test，不用 BDD）
 
 ### 測試範圍
 
-| Feature | .feature 檔案 | Scenarios 數 |
-|---------|--------------|-------------|
-| F-{N}: {名稱} | `specs/features/f{N}-{name}.feature` | {N} |
-| F-{N}: {名稱} | `specs/features/f{N}-{name}.feature` | {N} |
+| Feature | Spec | AC 數 |
+|---------|------|-------|
+| F-{N}: {名稱} | `specs/features/f{N}-{name}.md` | {N} |
 
 ### 工作內容
 
-1. 將 `specs/features/*.feature` 複製到 `test/features/`
-2. 撰寫 step definitions（`test/steps/`）實作每個 Given/When/Then
-3. 設定 `test/playwright.config.ts`（playwright-bdd）
-4. 使用 `npx bddgen` 生成 Playwright test 檔案
+1. 為 sprint plan 列出的每個 feature 建立 `test/e2e/f{N}-{name}.spec.ts`
+2. 把 spec .md 中每條 acceptance criterion 轉成一個 `test('[Happy/Error/Edge] {AC 描述}', ...)`
+3. 設定 `test/playwright.config.ts`（純 Playwright，無 playwright-bdd / bddgen）
+4. 從 `specs/contracts.ts` import `TESTIDS` / `API_PATHS` / `TOAST`，禁止 hardcoded literal
 5. 發 PR
 
-### Step Definition 重點
+### 撰寫重點
 
-API 步驟需涵蓋：
+API 測試需涵蓋：
 - HTTP methods（GET/POST/PUT/PATCH/DELETE）
-- Response status 驗證
-- Response body 驗證（含 error codes）
-- Auth token 管理
+- Response status / body / error codes 驗證
+- Auth token（用 fixture 管理）
 
-UI 步驟需涵蓋（如有前端）：
+UI 測試需涵蓋（如有前端）：
 - 頁面導航
 - 表單填寫和提交
-- 文字/元素可見性驗證
+- 文字/元素可見性驗證（用 contracts.ts 的字串）
 - URL 驗證
 
 ### 相關
@@ -594,6 +580,6 @@ BODY
 
 - 使用繁體中文
 - 技術 survey 要有具體數據和比較，不能只靠印象
-- Feature issue 完整引用 .feature 場景
+- Feature issue 完整引用 spec .md 的 acceptance criteria
 - 依賴分析考慮 UI 元件依賴
 - 實作指引具體到檔案層級

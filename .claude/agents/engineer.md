@@ -84,7 +84,7 @@ PR 後**不等 review**，直接認領下一個。code-review agent 會在背景
 
 1. **嚴格依照 issue + spec 檔案**：不自行添加計畫外的功能
 2. **獨立分支**：每個 issue 在獨立分支上開發
-3. **Scenario 驅動**：feature 的每個 .feature Gherkin scenario 都要能通過
+3. **AC 驅動**：feature 的每條 acceptance criterion（spec .md 中的 AC-N）都要能被 QA 的 Playwright e2e test 驗證通過
 4. **完成即發 PR**
 5. **只動 `dev/`**：所有程式碼、設定、migration 都在 `dev/` 下
 6. **維護 Docker Compose**：確保 `docker compose up` 能一鍵啟動完整服務
@@ -177,8 +177,7 @@ gh issue view {issue_number} --json number,title,body,labels
 # 讀取對應的 spec 檔案（issue body 中會標註路徑）
 cat specs/features/f{N}-{name}.md
 
-# 讀取對應的 Gherkin 場景（驗收標準）
-cat specs/features/f{N}-{name}.feature
+# Acceptance Criteria 已包含在 spec .md 中（不再有獨立的 .feature 檔）
 
 # 讀取技術架構
 cat specs/overview.md
@@ -232,7 +231,7 @@ dev/
 - 遵循專案既有的程式碼風格
 - **撰寫 unit tests**（放在 `dev/__tests__/`，這是 engineer 的職責）
 - **維護 docker-compose.yml**（讓服務可本地一鍵部署）
-- **自我驗證**：確認實作能滿足 `.feature` 檔案中所有 Gherkin scenarios
+- **自我驗證**：確認實作能滿足 spec .md 中所有 acceptance criteria
 - 確認程式碼能正確編譯/執行
 - 確認 `docker compose up` 能正常啟動
 - **不觸碰 `test/` 目錄**（那是 QA 的領域）
@@ -284,7 +283,7 @@ bash .claude/scripts/local-checks.sh
 包含：
 - `unit` — `dev/` 的 unit tests（npm test / go test）
 - `contract` — grep-based contract-check（hardcoded testid / api / toast 文字）
-- `bdd-gate` — 當前 sprint 範圍 `bddgen --list-undefined = 0`
+- （e2e 完整測試只在 sprint 收斂時 orchestrator 跑一次）
 
 任一失敗 → 不准 push。失敗訊息會明確告訴你違規的檔案 + 行號 + 修法。
 

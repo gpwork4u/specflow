@@ -38,7 +38,7 @@ for LANE in backend frontend pipeline; do
   fi
 done
 
-# QA：1 個（撰寫 step definitions）
+# QA：1 個（撰寫 Playwright e2e tests）
 Agent(subagent_type="qa-engineer", run_in_background=true, isolation="worktree",
       prompt="sprint=$SPRINT")
 
@@ -66,4 +66,4 @@ CI 只跑 build-and-lint；test 在 push 前 `local-checks.sh` 已過。Code rev
 
 ## 完成後
 
-所有 lane drain 完畢 + 所有 PR merge → `specflow:start` Phase 4.9 infra 確認 → Phase 5 BDD 測試 → Phase 5.5 sprint code review → Phase 5.6 verifier
+所有 lane drain 完畢 + 所有 PR merge → `specflow:start` Phase 4.9 infra 確認 → Phase 5 e2e 測試 → Phase 5.5 sprint code review → Phase 5.6 verifier

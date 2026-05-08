@@ -83,7 +83,7 @@ fi
 
 if [ "$WARN" -gt 0 ]; then
   echo ""
-  echo "⚠️  有 $WARN 個可選工具缺失（Docker 用於本機 BDD 測試環境，建議安裝）。"
+  echo "⚠️  有 $WARN 個可選工具缺失（Docker 用於本機 e2e 測試環境，建議安裝）。"
 fi
 
 echo ""
