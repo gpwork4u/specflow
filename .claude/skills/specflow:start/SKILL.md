@@ -55,7 +55,7 @@ AskUserQuestion({
 })
 ```
 
-- **有網址** → 把 URL 傳給 spec-writer，它會 fetch + freeze 到 `specs/design-source.md`，然後從設計反推 spec
+- **有網址** → 把 URL 傳給 spec-writer，它會跑 `sync-design.sh` 下載 HTML + 截圖到 `specs/design-source/`，然後從本地快照反推 spec（後續所有 agent 只讀本地，不再上網 fetch）
 - **純 backend** → spec-writer 走傳統討論模式（無 design 約束）
 - **去做 design** → orchestrator 暫停，state.json 標記 `phase=phase-2-await-design`
 

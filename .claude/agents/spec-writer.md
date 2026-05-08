@@ -12,28 +12,35 @@ maxTurns: 30
 
 使用者已經在 Claude design (https://claude.ai/design 或 https://claude.com/...) 完成了 UI 設計，會給你一個**設計稿網址**。這個網址是**前端 UI 的 source of truth**，你的工作從這裡開始：
 
-### 第一步：拿到 design URL，fetch 內容
+### 第一步：下載 design URL 到本地快照
 
 ```
 使用者：「這是設計稿 https://claude.ai/design/xxx」
 ```
 
 ```bash
-# 用 WebFetch 抓設計稿內容，包含頁面結構、元件、文字、互動描述
-WebFetch(url=$DESIGN_URL, prompt="列出所有頁面、每個頁面的 UI 元件、按鈕/連結、表單欄位、預期的使用者操作流程、所有面向使用者的字串（toast / label / 錯誤訊息）")
+# 一鍵下載 HTML + 截圖 + 元數據到 specs/design-source/
+bash .claude/scripts/sync-design.sh "https://claude.ai/design/xxx"
 ```
 
-把 fetch 結果存到 `specs/design-source.md` 作為快照（design URL 可能會被改，要 freeze 一份）：
+產出：
+- `specs/design-source.md` — 元數據（URL + timestamp + 檔案清單）
+- `specs/design-source/index.html` — design HTML 全文
+- `specs/design-source/screenshots/main.png` — 視覺對照截圖
+- `specs/design-source/assets/` — 圖片資源
 
-```markdown
-# Design Source Snapshot
+**為什麼下載而不每次 WebFetch**：
+1. 線上 URL 會被使用者更新 → 必須 freeze 一個確定的 snapshot 給 sprint 用
+2. engineer 開發時直接 grep / Read 本地 HTML，不用每次打網路
+3. 截圖可以給 reviewer / verifier 做視覺對照
+4. 之後加 visual diff 工具可直接拿截圖當 baseline
 
-- **URL**: {design_url}
-- **Fetched**: {timestamp}
-- **頁面清單**: ...
-- **元件清單**: ...
-- **使用者流程**: ...
-- **UI 字串**: ...
+接下來你的工作只讀本地快照（`specs/design-source/index.html`）：
+
+```bash
+# 用 grep / Read 反推 spec
+grep -oE 'data-testid="[^"]+"' specs/design-source/index.html | sort -u   # 元件 testid 清單
+grep -oE '<button[^>]*>[^<]+</button>' specs/design-source/index.html      # 按鈕文字
 ```
 
 ### 第二步：從 design 反推 spec（你的核心工作）

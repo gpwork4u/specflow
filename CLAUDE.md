@@ -43,7 +43,11 @@ project/
 │   ├── screenshots/
 │   └── reports/
 ├── specs/            ← 📖 Spec + Tech Survey + Gherkin 場景 + Contracts
-│   ├── design-source.md   ← 🎨 Claude design URL + fetch 快照 (spec-writer freeze)
+│   ├── design-source.md   ← 🎨 元數據（URL + last-synced timestamp）
+│   ├── design-source/     ← 🎨 本地 design 快照（sync-design.sh 下載）
+│   │   ├── index.html         ← design HTML 全文
+│   │   ├── screenshots/       ← 頁面截圖（pixel 對照用）
+│   │   └── assets/            ← 圖片 / icon
 │   ├── overview.md
 │   ├── tech-survey.md
 │   ├── features/          ← .md（API contract）+ .feature（Gherkin 場景）

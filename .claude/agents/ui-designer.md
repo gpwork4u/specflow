@@ -128,17 +128,20 @@ project/
 ### 第一步：讀取 Design Source + Issue
 
 ```bash
-# Design source（Claude design URL 的 fetch 快照，spec-writer 已準備好）
+# 1. 讀本地 design 快照（spec-writer 已用 sync-design.sh 下載到 specs/design-source/）
+[ ! -f specs/design-source/index.html ] && { echo "🔴 design 快照不存在，請 spec-writer 先跑 sync-design.sh"; exit 1; }
 cat specs/design-source.md
-DESIGN_URL=$(grep -oE 'https://claude\.(ai|com)/[^ )]+' specs/design-source.md | head -1)
 
-# 重新 fetch 一次確認最新內容（design 可能被使用者更新）
-WebFetch(url=$DESIGN_URL, prompt="列出所有頁面的：(1) 元件樹，每個元件給合理 testid 命名，(2) 所有 color / spacing / typography / radius / shadow 的具體數值，(3) 所有面向使用者的字串（toast / button / label / error message）並給它們語意化的 key 名稱")
+# 2. 從本地 HTML 抽 design tokens / testids / 文字
+# 不要 WebFetch — 本地檔案是 source of truth
+grep -oE 'data-testid="[^"]+"' specs/design-source/index.html | sort -u
+grep -oE 'style="[^"]*color:[^;"]+' specs/design-source/index.html
+grep -oE '<button[^>]*>[^<]+</button>' specs/design-source/index.html
 
-# Design issue（tech-lead 給的範圍說明）
+# 3. Design issue（tech-lead 給的範圍說明）
 gh issue view {design_issue_number} --json number,title,body
 
-# 技術選型（UI 框架、元件庫）
+# 4. 技術選型（UI 框架、元件庫）
 cat specs/tech-survey.md
 ```
 

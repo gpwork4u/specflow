@@ -414,6 +414,13 @@ As a {角色}, I want {功能}, so that {價值}
 - Import 用：`specs/contracts.ts` → `TESTIDS.xxx`, `TOAST.xxx`, `API_PATHS.xxx`
 - ⚠️ 所有 hardcoded path / testid / 文字都要改成 import contracts.ts，contract-check.sh 會在 PR 阻擋
 
+## Design Reference（frontend / design issue 必填）
+- **Local HTML**: `specs/design-source/index.html` (從本地讀，不要 WebFetch 線上)
+- **Section / 元件**: {grep keyword 或 anchor，例：`grep -A 30 'data-testid="sent-record-card"'`}
+- **Screenshot**: `specs/design-source/screenshots/{page}.png` (視覺對照用)
+- **頁面在 design 上的位置**: {例：「Sent 頁面，左側 SidebarFilter + 右側 RecordList」}
+- ⚠️ Frontend engineer pixel-perfect 還原；design 沒涵蓋的情境（hover / empty / error）→ 開 issue 標 `design-question` 不要自行決定
+
 ## API Contract
 （從 spec .md 複製）
 
