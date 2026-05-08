@@ -2,17 +2,20 @@
 
 ## 概述
 
-使用者只需做兩件事：
-1. **與 spec agent 對話** — 確認需求、技術偏好、sprint 規劃
-2. **確認 release** — 每個 sprint 完成後確認發佈
+使用者只需做三件事：
+1. **在 [Claude design](https://claude.ai/design) 完成 UI 設計**，把網址交給 spec agent
+2. **與 spec agent 對話** — 補齊 design 看不到的部份（backend / data / 業務邏輯），規劃 sprint
+3. **確認 release** — 每個 sprint 完成後確認發佈
+
+> 純 backend / API 專案可跳過 step 1，spec agent 走傳統討論模式。
 
 ## 角色分工
 
 | 角色 | 職責 | 工作目錄 | 產出 | Model |
 |------|------|---------|------|-------|
-| **spec-writer** | 與使用者討論需求 | `specs/` | Epic + Sprint issues | opus |
-| **tech-lead** | 技術 survey + 開 issue 分配工作 | `specs/` | tech-survey.md + Feature/QA/Design issues | opus |
-| **ui-designer** | 建立可重用 UI component dataset | `design/` | Design tokens + 元件規格 + 範例 | sonnet |
+| **spec-writer** | 從 Claude design URL 反推需求，補齊 backend / data / 業務邏輯 | `specs/` | design-source.md + Epic + Sprint issues | opus |
+| **tech-lead** | 技術 survey + Contract 三件套 + 開 issue 分配工作 | `specs/` | tech-survey.md + contracts/ + Feature/QA/Design issues | opus |
+| **ui-designer** | 從 Claude design URL 抽 design tokens + 元件 + 字串清單（不從零設計） | `design/` | Design tokens + 元件 handoff + 字串 handoff | sonnet |
 | **engineer** | 認領 feature / bug，寫程式 + unit test（分 backend / frontend / pipeline 三個 lane，每 lane 1 個）| `dev/` | PR（Closes #issue） | sonnet |
 | **qa-engineer** | 認領 QA issue，撰寫 playwright-bdd step definitions | `test/` | Step Definitions PR + Bug issues（附截圖） | sonnet |
 | **code-review** | 審查 PR 品質、spec 一致性、安全性 | 唯讀 | PR Review（approve / request changes） | sonnet |
@@ -40,13 +43,14 @@ project/
 │   ├── screenshots/
 │   └── reports/
 ├── specs/            ← 📖 Spec + Tech Survey + Gherkin 場景 + Contracts
+│   ├── design-source.md   ← 🎨 Claude design URL + fetch 快照 (spec-writer freeze)
 │   ├── overview.md
 │   ├── tech-survey.md
 │   ├── features/          ← .md（API contract）+ .feature（Gherkin 場景）
 │   ├── contracts/         ← 🔒 Single source of truth (tech-lead 維護)
 │   │   ├── api.md         ← path / method / schema
-│   │   ├── dom.md         ← testid / selector
-│   │   └── ux-text.md     ← toast / label / button 文字
+│   │   ├── dom.md         ← testid / selector（從 design-source 抽出）
+│   │   └── ux-text.md     ← toast / label / button 文字（從 design-source 抽出）
 │   ├── contracts.ts       ← 上述三個檔的 TS export，frontend/qa/backend 共用 import
 │   ├── dependencies.md
 │   ├── logs/              ← Sprint 工作日誌
@@ -58,9 +62,14 @@ project/
 ## 流程
 
 ```
-使用者操作              背景自動執行
-──────────            ─────────────
-/specflow:start ──→ spec-writer（前景互動，選擇題提問）
+使用者操作                       背景自動執行
+──────────                     ─────────────
+[在 Claude design 完成 UI 設計]
+  │ 提供設計稿 URL
+  ▼
+/specflow:start ──→ spec-writer（前景互動）
+  │                       │  WebFetch design URL → specs/design-source.md
+  │                       │  反推 spec + 補齊 backend/data/業務邏輯（AskUserQuestion）
   │                       │  產出：specs/ + Epic + Sprint issues
   │ 確認 spec            ▼
   │                 tech-lead（背景）

@@ -154,6 +154,14 @@ cat specs/infra.md
 
 ### 第二步 C：產出 Contract 三件套（hard gate，spec phase 不可省）
 
+> **Design-led 專案的特殊規則**：如果 `specs/design-source.md` 存在（spec-writer 從 Claude design URL 抽出），則 `contracts/dom.md` 和 `contracts/ux-text.md` 的內容**直接來自 ui-designer 的 handoff**：
+> - `design/components-handoff.md` → 抄進 `specs/contracts/dom.md`
+> - `design/ux-text-handoff.md` → 抄進 `specs/contracts/ux-text.md`
+> - 不要自創 testid 或 UI 字串；如果 handoff 有缺漏，先回去找 ui-designer 補。
+> - `contracts/api.md` 仍由 tech-lead 設計（因為 backend API 在 design 上看不到）。
+
+
+
 這三個 contract 檔案是**所有 lane 的 single source of truth**。沒先有 contract，engineer / qa 同時動手會立刻出現「frontend 寫 `data-testid="user-card"`、qa 寫 `data-testid="userCard"`、backend 回 `/api/v1/users` 而 frontend 打 `/api/users`」這種互不對齊的災難。
 
 ```

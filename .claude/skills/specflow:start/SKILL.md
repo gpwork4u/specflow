@@ -36,14 +36,36 @@ bash .claude/scripts/state.sh phase "phase-1-init" "spec-writer 開始討論需�
 
 > **State 紀錄原則**：每進入新 phase / 啟動 background agent / 收到 agent 回報時，呼叫 `state.sh phase` 或 `state.sh agent-add/done` 寫入 `.specflow/state.json`，讓 `/specflow:resume` 可以接續。
 
-### Phase 2：Spec 討論（使用者參與）
+### Phase 2：Design URL → Spec（使用者參與）
+
+**新流程：UI 先在 Claude design 完成**。orchestrator 啟動 spec-writer 前先確認設計稿狀態：
+
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "UI 設計準備好了嗎？",
+    header: "Design",
+    multiSelect: false,
+    options: [
+      { label: "有 Claude design 網址", description: "貼上 https://claude.ai/design/... 或 https://claude.com/...，從設計稿出發反推 spec（Recommended）" },
+      { label: "純 backend / API 專案", description: "沒有 UI，跳過 design 直接討論需求" },
+      { label: "我先去做 design", description: "暫停，我去 Claude design 完成 UI 後回來執行 /specflow:resume" }
+    ]
+  }]
+})
+```
+
+- **有網址** → 把 URL 傳給 spec-writer，它會 fetch + freeze 到 `specs/design-source.md`，然後從設計反推 spec
+- **純 backend** → spec-writer 走傳統討論模式（無 design 約束）
+- **去做 design** → orchestrator 暫停，state.json 標記 `phase=phase-2-await-design`
 
 啟動 spec-writer agent（**前景，需使用者互動**）：
 - `subagent_type: "spec-writer"`
 - `run_in_background: false`
-- 傳入 $ARGUMENTS
+- 傳入 $ARGUMENTS（含 design URL，如有）
 
 spec-writer 產出：
+- `specs/design-source.md` — Claude design URL 的 fetch 快照（如有）
 - `specs/` 目錄下的 spec 檔案（source of truth）
 - `specs/features/*.feature` — Gherkin 場景（可執行的接受標準）
 - Epic Issue + Sprint Issues
@@ -62,9 +84,11 @@ tech-lead：
 4. 驗證 .feature 檔頭都有 `@sprint-N` tag（hard gate）
 5. 建立 feature issues（含 scenarios + 實作指引 + 技術選型 + contract reference）
 6. 建立 QA issue（含 scenarios 清單 + contract reference）
-7. 建立 design issue（含 UI 元件清單 + contract reference）
+7. 建立 design issue — **僅在 `specs/design-source.md` 存在時建**：要求 ui-designer 從 design URL 抽 tokens / 元件 / 字串到 `design/`，產出 handoff 給 tech-lead 在 contract phase 吸進 contracts/。純 backend 專案則不開 design issue。
 
 **Contract 沒寫完不開 issue** — 否則 engineer 開始寫程式碼時 contract 還沒對齊，會出現 hardcoded literal 滿天飛。
+
+> **Design-led 順序提示**：理想上 ui-designer 應**先於** tech-lead 完成 contract phase（因為 dom.md / ux-text.md 要吸 ui-designer 的 handoff）。orchestrator 可以先開 design issue → ui-designer 完成 handoff → tech-lead 才產 contracts → 才開 feature/qa issues。
 
 ### Phase 4：每個 lane 啟動 1 個 agent（背景並行，lane 內循序）
 
