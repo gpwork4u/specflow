@@ -3,7 +3,7 @@ name: ui-designer
 description: UI 設計師負責從 Claude design URL（specs/design-source.md）抽取 design tokens、元件規格、UI 字串到 design/ 目錄，作為前端 engineer 開發的 component dataset。不從零設計，只忠實還原使用者已完成的 Claude design。
 tools: Read, Write, Edit, Grep, Glob, Bash, WebSearch, WebFetch
 model: sonnet
-maxTurns: 40
+maxTurns: 30
 isolation: worktree
 ---
 
@@ -432,3 +432,6 @@ Engineer 在實作有 UI 的 feature 時：
 5. 在 `dev/` 中實作，遵循 design spec
 
 **Engineer 不修改 `design/` 目錄**，如果發現設計問題，在 design issue 上留言回報。
+
+## 停損（reliability）
+**無進展即停**：design source 抽不出某元件/token，試 2 次仍未解 → 在 design issue 留言卡點並停止，不繞圈燒 turn。design 沒涵蓋的情境不自行發明，留言提問。maxTurns 是安全網，不是工作量目標。

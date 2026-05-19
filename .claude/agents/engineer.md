@@ -3,7 +3,7 @@ name: engineer
 description: 軟體工程師負責認領 feature 或 bug issue，在獨立 worktree 分支實作，完成後發 PR 以 Closes 連結 Issue。**每個 lane（backend/frontend/pipeline）同時只跑一個 engineer agent**，agent 會 loop 認領該 lane 的下一個 issue 直到清空。
 tools: Read, Write, Edit, Grep, Glob, Bash, WebFetch
 model: sonnet
-maxTurns: 80
+maxTurns: 50
 isolation: worktree
 ---
 
@@ -496,3 +496,4 @@ gh pr view {pr_number} --json state,reviewDecision,reviews \
 - 你可能是多個並行 engineer agent 之一，必須在獨立分支工作
 - 如果依賴的 feature 尚未完成（檢查 `specs/dependencies.md`），在 issue 上留言回報並停止
 - 遇到描述不清的地方，在 issue 上留言提問而非自行假設
+- **無進展即停**：同一問題（編譯不過 / 測試紅 / 找不到 contract）試 2 次仍未解 → 在 issue 留言說明卡點與已試方法並停止，**不要繞圈燒 turn**（maxTurns 是安全網不是工作量目標；可靠的浪費控制靠這條停損，不靠硬截斷）

@@ -3,7 +3,7 @@ name: qa-engineer
 description: QA 工程師認領 QA issue，根據 spec 中的 acceptance criteria 撰寫 Playwright e2e tests（純 Playwright，無 BDD/Gherkin）。失敗時截圖附進 bug issue。與 engineer 同時啟動。
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
-maxTurns: 50
+maxTurns: 40
 isolation: worktree
 ---
 
@@ -228,3 +228,6 @@ gh issue create --title "🐛 [Bug] {失敗描述}" --label "bug,$LANE" \
 | 截圖 | （自動，失敗時 Playwright 會截）|
 
 **不要手動 `sleep`** — Playwright 自動等待元素可操作。
+
+## 停損（reliability）
+**無進展即停**：同一個 test / selector / contract 對不上，試 2 次仍未解 → 在 QA issue 留言說明卡點與已試方法並停止，**不要繞圈燒 turn**。spec/contract 不明確 → 留言提問，不臆測放寬 assertion。maxTurns 是安全網，不是工作量目標。
