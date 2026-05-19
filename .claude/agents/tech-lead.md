@@ -413,14 +413,13 @@ As a {角色}, I want {功能}, so that {價值}
 - **頁面在 design 上的位置**: {例：「Sent 頁面，左側 SidebarFilter + 右側 RecordList」}
 - ⚠️ Frontend engineer pixel-perfect 還原；design 沒涵蓋的情境（hover / empty / error）→ 開 issue 標 `design-question` 不要自行決定
 
-## API Contract
-（從 spec .md 複製）
-
-## Data Model
-（從 spec .md 複製）
-
-## Acceptance Criteria
-（從 spec .md 複製 AC 條列；engineer 確認每條 AC 都有對應實作，QA 會把每條 AC 轉成一個 Playwright `test()`）
+## Spec（單一來源 — 不複製全文，按路徑讀）
+- API Contract / Data Model / Acceptance Criteria 全文在 `specs/features/f{N}-{name}.md`
+- 3 行摘要：{此 feature 在做什麼、關鍵 endpoint、AC 條數}
+- engineer/QA 各自開工時讀一次 `specs/features/f{N}-{name}.md`（**勿在 issue body 貼全文**：
+  同內容會被 engineer + QA + review + verifier 各自重付費，W1 浪費；spec .md 才是 source of truth，
+  貼進 issue 反而會與檔案漂移）
+- engineer 確認每條 AC 都有對應實作；QA 把每條 AC 轉成一個 Playwright `test()`
 
 ## 實作指引
 
