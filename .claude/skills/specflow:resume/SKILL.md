@@ -94,10 +94,12 @@ ALL_LANES_CLOSED="false"
 | `phase-3-techlead` | feature/qa/design issues 已存在 → 跳到 phase-4 | 啟動 tech-lead（背景） |
 | `phase-4-impl` | `ALL_LANES_CLOSED=true` → 跳到 phase-5 | 只啟動 `OPEN_$LANE > 0` 的 lane（不要重啟已 drained） |
 | `phase-4.5-review` | open PR 已全部 APPROVED → 跳到 phase-4-impl 等 merge | 對 open 且 review pending 的 PR 啟動 code-review |
-| `phase-5-bdd` | `sprint_test_outcome=success` → 跳到 phase-5.5；`failure` → 確認最新 bug issue 是否已關，否則回 phase-4 | 輪詢 sprint-test workflow 結果 |
+| `phase-5-e2e` | `sprint_test_outcome=success` → 跳到 phase-5.5；`failure` → 確認最新 bug issue 是否已關，否則回 phase-4 | 輪詢 sprint-test workflow 結果 |
 | `phase-5.5-verify` | sprint issue 已 closed → 跳到 phase-7 | 啟動 verifier |
 | `phase-6-close` | milestone 已 closed → phase-7 | 產出 sprint log + 關 milestone（verifier 會做） |
 | `phase-7-next` | — | 詢問是否進入下一個 sprint |
+
+> **phase 字串只做提示，用子字串模糊比對不要精確 ==**（phase 命名會演進：`phase-cr-*`、`phase-5-bdd`/`phase-5-e2e` 等都可能出現 → 精確表必過時 → resume 破功）。以上 `跳過條件` 的 GitHub 即時狀態才是路由依據；phase 字串與 GitHub 推斷衝突時**一律以 GitHub 為準**。比對範例：`case "$phase" in *spec*) … *techlead*|*plan*) … *impl*|*engineer*) … *review*) … *e2e*|*bdd*|*test*) … *verify*) … *close*) … *next*) … esac`。
 
 **重啟 lane 前的去重邏輯**：
 

@@ -14,10 +14,15 @@ set -eu
 #   state.sh lane-status                          # 印 4 lane 狀態
 #   state.sh log <message>                     # append 一行 audit log
 #   state.sh show                              # 印出整份 state
+#
+# 並發安全：lane 制最多 5 個背景 agent 同時寫 state.json。所有寫入經
+# _locked 序列化（flock；macOS 無 flock 退回 mkdir 原子鎖），避免
+# jq>tmp;mv 的 read-modify-write lost-update。
 
 STATE_DIR=".specflow"
 STATE_FILE="$STATE_DIR/state.json"
 LOG_FILE="$STATE_DIR/audit.log"
+LOCK_FILE="$STATE_DIR/state.lock"
 
 ensure_state() {
   mkdir -p "$STATE_DIR"
@@ -48,8 +53,65 @@ EOF
 
 now() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
 
+# 序列化鎖：優先 flock（Linux/CI），退回 mkdir 原子鎖（macOS 無 flock）。
+_locked() {
+  mkdir -p "$STATE_DIR"
+  if command -v flock >/dev/null 2>&1; then
+    exec 9>"$LOCK_FILE"; flock 9
+    "$@"
+  else
+    i=0
+    until mkdir "$LOCK_FILE.d" 2>/dev/null; do
+      i=$((i+1)); [ "$i" -gt 100 ] && rm -rf "$LOCK_FILE.d" && mkdir "$LOCK_FILE.d"
+      sleep 0.1
+    done
+    trap 'rm -rf "$LOCK_FILE.d"' EXIT
+    "$@"
+    rm -rf "$LOCK_FILE.d"; trap - EXIT
+  fi
+}
+
 cmd="${1:-show}"
 shift || true
+
+w_set() {
+  path="$1"; value="$2"
+  tmp=$(mktemp)
+  jq --arg ts "$(now)" "(.$path) |= ($value) | .updated_at = \$ts" "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+w_phase() {
+  phase="$1"; next="${2:-}"
+  tmp=$(mktemp)
+  jq --arg p "$phase" --arg n "$next" --arg ts "$(now)" \
+    '.phase = $p | .next_action = $n | .updated_at = $ts' "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+  echo "[$(now)] phase=$phase next=$next" >> "$LOG_FILE"
+}
+w_agent_add() {
+  type="$1"; issue="$2"; pr="${3:-null}"; branch="${4:-}"; status="${5:-running}"
+  tmp=$(mktemp)
+  jq --arg t "$type" --argjson i "$issue" --argjson p "${pr:-null}" \
+     --arg b "$branch" --arg s "$status" --arg ts "$(now)" \
+     '.in_flight_agents += [{"type":$t,"issue":$i,"pr":$p,"branch":$b,"status":$s,"started_at":$ts}] | .updated_at = $ts' \
+     "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+w_agent_done() {
+  pr="$1"
+  tmp=$(mktemp)
+  jq --argjson p "$pr" --arg ts "$(now)" \
+    '.in_flight_agents |= map(select(.pr != $p)) | .updated_at = $ts' "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+w_lane_close() {
+  lane="$1"
+  tmp=$(mktemp)
+  jq --arg l "$lane" --arg ts "$(now)" \
+    '.lane_closed[$l] = true | .updated_at = $ts' "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+  echo "[$(now)] lane-close $lane" >> "$LOG_FILE"
+}
 
 case "$cmd" in
   init)
@@ -58,10 +120,7 @@ case "$cmd" in
     ;;
   set)
     ensure_state
-    path="$1"; value="$2"
-    tmp=$(mktemp)
-    jq --arg ts "$(now)" "(.$path) |= ($value) | .updated_at = \$ts" "$STATE_FILE" > "$tmp"
-    mv "$tmp" "$STATE_FILE"
+    _locked w_set "$1" "$2"
     ;;
   get)
     ensure_state
@@ -69,30 +128,15 @@ case "$cmd" in
     ;;
   phase)
     ensure_state
-    phase="$1"; next="${2:-}"
-    tmp=$(mktemp)
-    jq --arg p "$phase" --arg n "$next" --arg ts "$(now)" \
-      '.phase = $p | .next_action = $n | .updated_at = $ts' "$STATE_FILE" > "$tmp"
-    mv "$tmp" "$STATE_FILE"
-    echo "[$(now)] phase=$phase next=$next" >> "$LOG_FILE"
+    _locked w_phase "$1" "${2:-}"
     ;;
   agent-add)
     ensure_state
-    type="$1"; issue="$2"; pr="${3:-null}"; branch="${4:-}"; status="${5:-running}"
-    tmp=$(mktemp)
-    jq --arg t "$type" --argjson i "$issue" --argjson p "${pr:-null}" \
-       --arg b "$branch" --arg s "$status" --arg ts "$(now)" \
-       '.in_flight_agents += [{"type":$t,"issue":$i,"pr":$p,"branch":$b,"status":$s,"started_at":$ts}] | .updated_at = $ts' \
-       "$STATE_FILE" > "$tmp"
-    mv "$tmp" "$STATE_FILE"
+    _locked w_agent_add "$1" "$2" "${3:-null}" "${4:-}" "${5:-running}"
     ;;
   agent-done)
     ensure_state
-    pr="$1"
-    tmp=$(mktemp)
-    jq --argjson p "$pr" --arg ts "$(now)" \
-      '.in_flight_agents |= map(select(.pr != $p)) | .updated_at = $ts' "$STATE_FILE" > "$tmp"
-    mv "$tmp" "$STATE_FILE"
+    _locked w_agent_done "$1"
     ;;
   lane-close)
     ensure_state
@@ -101,11 +145,7 @@ case "$cmd" in
       feature|design|qa|bug) ;;
       *) echo "lane must be feature|design|qa|bug" >&2; exit 1 ;;
     esac
-    tmp=$(mktemp)
-    jq --arg l "$lane" --arg ts "$(now)" \
-      '.lane_closed[$l] = true | .updated_at = $ts' "$STATE_FILE" > "$tmp"
-    mv "$tmp" "$STATE_FILE"
-    echo "[$(now)] lane-close $lane" >> "$LOG_FILE"
+    _locked w_lane_close "$lane"
     ;;
   lane-status)
     ensure_state
@@ -113,7 +153,7 @@ case "$cmd" in
     ;;
   log)
     ensure_state
-    echo "[$(now)] $*" >> "$LOG_FILE"
+    _locked sh -c "echo \"[$(now)] $*\" >> \"$LOG_FILE\""
     ;;
   show)
     ensure_state
