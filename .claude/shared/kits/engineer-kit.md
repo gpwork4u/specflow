@@ -93,27 +93,27 @@ docker compose down
 
 ---
 
-## 4. PR + auto-merge（deliver-first：先 draft 後 ready）
+## 4. PR + auto-merge（deliver-first 絕對序列）
 
-### 4a. 開分支立刻發 draft PR（commit-before-stop hard rule）
+### 4a. 認領 issue 後的前 4 個 Bash 呼叫（不可插別的 tool call）
 
 ```bash
-git checkout -b feature/${ISSUE_NUM}-{desc}
-# 最小骨架：依 spec .md 的「需建立檔案」清單建空檔，每個只放一行 stub
-mkdir -p dev/src/{routes,models,validators,middleware}
-touch dev/src/routes/{name}.ts dev/src/models/{name}.ts  # ...
-echo "// stub for #${ISSUE_NUM} — WIP" > dev/src/index.ts
-git add -A && git commit -q -m "chore: scaffold for #${ISSUE_NUM}
-
-Refs #${ISSUE_NUM}"
-git push -u origin "feature/${ISSUE_NUM}-{desc}"
+# (1) fetch + rebase 防 race
+cd "$DEMO_DIR" && git fetch -q origin && git checkout main && git pull -q --rebase
+# (2) 開分支
+git checkout -b "feature/${ISSUE_NUM}-${SLUG}"
+# (3) empty commit 鎖 branch
+git commit --allow-empty -q -m "chore: [WIP] start #${ISSUE_NUM}"
+# (4) push + draft PR
+git push -u -q origin "feature/${ISSUE_NUM}-${SLUG}"
 DRAFT_PR=$(gh pr create --draft --title "[WIP] {Issue 標題}" \
   --body "Closes #${ISSUE_NUM}
 
-[WIP] Skeleton committed; implementation in progress." \
+[WIP] Implementation in progress." \
   --label "feature,${LANE}" --milestone "${SPRINT}" --json number --jq .number)
-echo "draft PR #${DRAFT_PR} created — deliverable now in GitHub"
 ```
+
+**完成這 4 步才能開始 Read spec / 寫 code / npm install**。為什麼這麼硬：v2 benchmark frontend agent 試 `npm install` 先沒推 → 沒 PR；qa commit 完忘 push → 沒 PR。絕對序列防止本能性「先驗證再 commit」。
 
 ### 4b. 實作期間每 ~10 檔 commit + push（PR 自動跟上）
 

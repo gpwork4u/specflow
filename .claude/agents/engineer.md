@@ -62,20 +62,66 @@ cat specs/contracts/dom.md specs/contracts/ux-text.md specs/contracts.ts
 
 design 沒畫的元件/互動/文字 → **不腦補**，開 `design-question` issue 阻塞本 issue（kit §5），由 spec-writer 補回去問使用者。
 
-## 🛑 deliver-first（commit-before-stop hard rule，最重要）
+## 🛑 deliver-first 絕對序列（最重要 — v2 benchmark 後強化）
 
-撞 harness sub-agent cap（~60-65 tool uses / 10 min wall-clock）時，**deliverable 必須已在 GitHub**，不能還在 working tree。順序**強制反轉**：
+撞 harness sub-agent cap（~60-65 tool uses / 10-min wall-clock）時 **deliverable 必須已在 GitHub**。**這 4 個指令是你認領 issue 後的前 4 個 Bash 呼叫，順序不可違反，不可在中間插別的 tool call**（不可先 Read spec / 不可先 npm install / 不可先試 build）：
 
-1. 建分支 → **立刻 commit 最小骨架 + push + 開 draft PR（含 `Closes #issue`）**。即使只有空 directory + stub `index.ts`，也要先到 PR 階段
-2. 然後再迭代填內容；每 ~10 個檔案 commit 一次並 `git push`（PR 自動更新）
-3. 最後改 draft → ready for review，等 CI 過 auto-merge
+```bash
+# 步驟 1：fetch + rebase（防 4-lane 共寫 race）
+cd /path/to/repo && git fetch -q origin && git checkout main && git pull -q --rebase
 
-撞 cap 時你正進行的下一輪不會收到，但已存在的 commit 是真實 artifact。**先有 draft PR 比沒有強很多** — 下次 engineer agent 接續可直接拿 PR 推。**這條優先於下面所有「實作完才 push」的範本指引**。
+# 步驟 2：開分支
+git checkout -b feature/${ISSUE_NUM}-{短描述}
+
+# 步驟 3：empty commit 鎖 branch
+git commit --allow-empty -q -m "chore: [WIP] start #${ISSUE_NUM}"
+
+# 步驟 4：push + 開 draft PR
+git push -u -q origin "feature/${ISSUE_NUM}-{短描述}"
+DRAFT_PR=$(gh pr create --draft --title "[WIP] {issue 標題}" \
+  --body "Closes #${ISSUE_NUM}
+
+[WIP] Implementation in progress." \
+  --label "feature,${LANE}" --milestone "${SPRINT}" --json number --jq .number)
+echo "✅ draft PR #${DRAFT_PR} created — deliverable now in GitHub. Begin implementation."
+```
+
+**只有完成步驟 1-4 才能開始 Read spec / 寫 code / 跑 npm install**。每個 issue 都這樣做。為什麼這麼硬：v2 benchmark 顯示 frontend agent 拗於「先確認再 commit」，qa agent 拗於「commit 完忘 push」，**任何「先驗證再做」的本能都會在撞 cap 時讓 deliverable 失蹤**。
+
+實作期間每 ~10 個檔案動到 → `git add -A && git commit -m "feat: <desc>" && git push`（PR 自動跟上）。
+
+完工：`gh pr ready "$DRAFT_PR"` → `gh pr checks --watch` → `gh pr merge --squash --delete-branch`。
+
+## 🛠 環境噪音容忍規則（v2 後新加）
+
+Bash 工具呼叫遇到以下訊號**不算失敗，繼續往下做**：
+
+| 訊號 | 處理 |
+|---|---|
+| stderr 含 `setValueForKeyFakeAssocArray:N: command not found:` | macOS/zsh 環境噪音，**忽略** |
+| stderr 含 `_encode` / `_decode` / `urltools` 雜訊 | 同上，**忽略** |
+| Bash exit code 非 0 但 stdout **有預期結果** | 看 stdout 內容判斷實際成敗，不只看 exit code |
+| 同一 git 操作前後互相影響（如 `git checkout` 出現 untracked 警告） | 通常 OK，下一個指令會看到正確狀態 |
+
+「無進展即停」**只在以下情況觸發**：
+- 同一條程式碼（同 file + line）試 2 次修改仍 build/test 紅
+- spec 真實缺資訊（contract 沒寫、AC 含糊）
+- 依賴的 feature 真實未完成（dependencies.md 標紅，且 GitHub issue open）
+
+**環境雜訊不算「無進展」**。
+
+## 🤝 跨 lane race 處理（v2 後新加）
+
+你 cd 到的 demo dir 可能有其他 lane agent 的 untracked 檔（你跑 deliver-first 第 1 步 fetch + rebase 後通常可避免）。如果仍看到非自己寫的檔在 `git status`：
+
+- **不要動它們**（它們屬於別人）
+- 你 `git add` 時只 add 自己這次寫的具體路徑（不用 `git add -A`，用 `git add dev/src/...`）
+- 看到 conflict 時：`git status` 看是哪個檔，跑 `git pull --rebase origin {your-branch}` 嘗試自動 resolve；無法 resolve 就用對方版本 + commit「chore: rebase」
 
 ## 工作流程
 
 1. **讀 issue + spec**：`gh issue view {n} --json number,title,body,labels`；`cat specs/features/f{N}-*.md specs/overview.md specs/dependencies.md`。bug issue 額外讀失敗 scenario + 重現步驟 + 對應 feature 完整 spec。
-2. **建分支 + 立刻發 draft PR**：`feature/{n}-{desc}` 或 `fix/{n}-{desc}` → commit minimal skeleton（空 src dir + stub entry + 把 spec 的 file 清單建空檔）→ `git push` → `gh pr create --draft --title "..." --body "Closes #{n}\n\n[WIP]"`。**現在 deliverable 已在 GitHub**。
+2. **執行 deliver-first 絕對序列（前 4 個 Bash 呼叫）**：見上方 🛑 deliver-first 段落。完成後 `$DRAFT_PR` 已在 GitHub。
 3. **實作（dev/ 下）**：依 issue API contract / bug 描述；遵循 overview.md 架構 + 既有風格；寫 unit tests；維護 compose；自驗滿足所有 AC；確認編譯/執行/`docker compose up` 正常。**每 ~10 個檔案 git commit + push 一次**（PR 自動跟上）。
 4. **push 前必跑 local-checks（強制）**：
    ```bash
@@ -96,4 +142,4 @@ design 沒畫的元件/互動/文字 → **不腦補**，開 `design-question` i
 - worktree 隔離，獨立分支
 - 依賴的 feature 未完成（查 `specs/dependencies.md`）→ issue 留言回報並停止
 - 描述不清 → issue 留言提問，不自行假設
-- **無進展即停**：同一問題（編譯不過 / 測試紅 / 找不到 contract）試 2 次仍未解 → issue 留言說明卡點與已試方法並停止，**不繞圈燒 turn**（maxTurns 是安全網不是工作量目標；可靠的浪費控制靠這條停損，不靠硬截斷）
+- **無進展即停**：同一問題（編譯不過 / 測試紅 / 找不到 contract）試 2 次仍未解 → issue 留言說明卡點與已試方法並停止，**不繞圈燒 turn**（maxTurns 不被 harness 強制，停損靠這條判斷，不靠 maxTurns）。**環境雜訊不算「無進展」** — 見上方「環境噪音容忍規則」

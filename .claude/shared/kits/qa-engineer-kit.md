@@ -94,32 +94,24 @@ test('[Happy] 使用者建立 resource 流程', async ({ page }) => {
 
 ## 5. PR 流程（deliver-first：先 draft 後 ready）
 
-### 5a. 立刻發 draft（commit-before-stop hard rule）
+### 5a. 認領 QA issue 後的前 4 個 Bash（不可插別的 tool call）
 
 ```bash
-git checkout -b test/sprint-${N}-e2e
-# 骨架：playwright.config.ts + 每 feature 一個空 spec 檔（含 import + describe 殼）
-cat > test/playwright.config.ts <<EOF
-# (配置範本見 §2)
-EOF
-for fid in f001 f002 f003 f004 f005 f006; do
-cat > "test/e2e/${fid}-stub.spec.ts" <<EOF
-import { test } from '@playwright/test';
-import { TESTIDS, API_PATHS, TOAST } from '../../specs/contracts';
-test.describe('${fid^^} — WIP', () => { test.skip('placeholder', () => {}); });
-EOF
-done
-git add test/
-git commit -q -m "chore: scaffold e2e tests for sprint ${N}
-
-Refs #{qa_issue_number}"
-git push -u origin "test/sprint-${N}-e2e"
+# (1) fetch + rebase
+cd "$DEMO_DIR" && git fetch -q origin && git checkout main && git pull -q --rebase
+# (2) 開分支
+git checkout -b "test/sprint-${N}-e2e"
+# (3) empty commit
+git commit --allow-empty -q -m "chore: [WIP] start QA #${QA_ISSUE}"
+# (4) push + draft PR
+git push -u -q origin "test/sprint-${N}-e2e"
 DRAFT=$(gh pr create --draft --title "[WIP] 🧪 Sprint ${N} E2E Tests" \
-  --body "Closes #{qa_issue_number}
+  --body "Closes #${QA_ISSUE}
 
-[WIP] Skeleton committed; AC tests in progress." \
-  --label "qa" --json number --jq .number)
+[WIP] Tests in progress." --label "qa" --json number --jq .number)
 ```
+
+**完成這 4 步才能開始 npm install / 寫 test**。v2 benchmark qa agent commit 完忘 push → 沒 PR；這序列把 `git push` 排第 4 步保證跑到。
 
 ### 5b. 實作每 ~6 個 test commit + push
 

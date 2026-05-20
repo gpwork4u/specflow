@@ -27,9 +27,29 @@ Playwright 範本（init / config / spec / PR / bug issue）在 **`.claude/share
 6. **只實作當前 sprint scope** — 看 `specs/sprints/sprint-N.md` 的 feature ID 清單，**只**寫這些檔；未來 sprint 不預寫
 7. **不擴充驗證** — spec 寫什麼驗什麼，不順手加額外 assertion；support helpers 只放當前 sprint 已用到的
 
-## 🛑 deliver-first（commit-before-stop hard rule）
+## 🛑 deliver-first 絕對序列（v2 benchmark 後強化）
 
-撞 harness sub-agent cap 時 **deliverable 必須已在 GitHub**。順序強制反轉：建分支 → 立刻 commit 空 `playwright.config.ts` + 6 個空 `test/e2e/fNNN-*.spec.ts` 檔（含 `import` line + `test.describe(...)` 骨架）→ push → `gh pr create --draft --body "Closes #{n}\n[WIP]"`。**再開始填 AC test 內容**，每 ~6 個 test commit + push 一次。撞 cap 時 draft PR 已在 GitHub，下次 QA agent 接續可直接拿 PR 推。
+撞 harness cap 時 **deliverable 必須已在 GitHub**。**這 4 個指令是你前 4 個 Bash，順序不可違，中間不插別的 tool call**：
+
+```bash
+cd /path/to/repo && git fetch -q origin && git checkout main && git pull -q --rebase
+git checkout -b test/sprint-${SPRINT_NUM}-e2e
+git commit --allow-empty -q -m "chore: [WIP] start QA #${QA_ISSUE}"
+git push -u -q origin "test/sprint-${SPRINT_NUM}-e2e"
+DRAFT_PR=$(gh pr create --draft --title "[WIP] 🧪 Sprint ${SPRINT_NUM} E2E" \
+  --body "Closes #${QA_ISSUE}
+
+[WIP] Test implementation in progress." --label "qa" --json number --jq .number)
+echo "✅ draft PR #${DRAFT_PR} created — start writing tests now."
+```
+
+只有完成這 4 步才能開始 Read spec / 寫 test / `npm install`。實作期間每 ~6 個 test commit + push 一次。完工 `gh pr ready` + auto-merge。
+
+**v2 benchmark 教訓**：qa agent 跑了 commit 但忘 push → 沒 PR。記住 **push 是 deliver-first 的最關鍵步**，commit 不夠。
+
+## 🛠 環境噪音容忍
+
+Bash stderr 出現 `setValueForKeyFakeAssocArray` / `_encode` / `_decode` 等 zsh 雜訊**不算失敗**。看 stdout 真實內容判斷。「無進展即停」**只在真實 test 紅 + 試 2 次未解時**觸發，不對環境雜訊反應。
 
 ## 工作流程
 

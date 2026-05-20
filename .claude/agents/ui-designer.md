@@ -31,9 +31,27 @@ UI/UX 規則、tokens/元件/頁面/PR 範本在 **`.claude/shared/kits/ui-desig
 
 UI/UX 設計檢查規則（10 優先級 + Pre-Delivery Checklist）見 kit §1，**忠實還原 design 優先於規則**。
 
-## 🛑 deliver-first（commit-before-stop hard rule）
+## 🛑 deliver-first 絕對序列（v2 benchmark 後強化）
 
-撞 harness sub-agent cap 時 **deliverable 必須已在 GitHub**。順序強制反轉：建分支 → 立刻 commit `design/tokens/{colors,typography,spacing}.json` 骨架（即使先放 design 原始值的拷貝沒整理過）+ `design/components-handoff.md` 空表頭 + `design/ux-text-handoff.md` 空表頭 → push → `gh pr create --draft --body "Closes #{n}\n[WIP]"`。**再開始填元件 spec / 頁面 layout**，每 ~3 個元件 commit + push 一次。撞 cap 時 draft PR 已在 GitHub。
+撞 harness cap 時 **deliverable 必須已在 GitHub**。**這 4 個指令是你前 4 個 Bash，順序不可違，中間不插別的 tool call**：
+
+```bash
+cd /path/to/repo && git fetch -q origin && git checkout main && git pull -q --rebase
+git checkout -b design/sprint-${SPRINT_NUM}-components
+git commit --allow-empty -q -m "chore: [WIP] start design #${DESIGN_ISSUE}"
+git push -u -q origin "design/sprint-${SPRINT_NUM}-components"
+DRAFT_PR=$(gh pr create --draft --title "[WIP] 🎨 Sprint ${SPRINT_NUM} UI dataset" \
+  --body "Closes #${DESIGN_ISSUE}
+
+[WIP] Token + component dataset in progress." --label "design" --json number --jq .number)
+echo "✅ draft PR #${DRAFT_PR} created."
+```
+
+只有完成這 4 步才能開始 Read design source / 寫 tokens / 元件 spec。實作期間每 ~3 個元件 commit + push 一次。
+
+## 🛠 環境噪音容忍
+
+Bash stderr `setValueForKeyFakeAssocArray` / `_encode` 雜訊忽略。「無進展即停」只在真實 design source 抽不出來 + 試 2 次未解時觸發。
 
 ## 工作流程
 

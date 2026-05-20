@@ -74,36 +74,24 @@ example.tsx：基於 tech-survey 選定的 UI 框架，列出各 variant/size/ic
 
 ## 5. PR 流程（deliver-first：先 draft 後 ready）
 
-### 5a. 立刻發 draft（commit-before-stop hard rule）
+### 5a. 認領 design issue 後的前 4 個 Bash（不可插別的 tool call）
 
 ```bash
-git checkout -b design/sprint-{N}-components
-mkdir -p design/tokens design/components design/pages
-# 骨架：3 個 token JSON 即使先放空 {} 也行 + handoff 空表頭
-echo '{}' > design/tokens/colors.json
-echo '{}' > design/tokens/typography.json
-echo '{}' > design/tokens/spacing.json
-cat > design/components-handoff.md <<EOF
-# Components Handoff（WIP）
-| testid | 元件 | 位置 |
-|--------|------|------|
-EOF
-cat > design/ux-text-handoff.md <<EOF
-# UX Text Handoff（WIP）
-| key | 文字 | 觸發 |
-|-----|------|------|
-EOF
-git add design/
-git commit -q -m "chore: scaffold UI dataset for sprint {N}
+# (1) fetch + rebase
+cd "$DEMO_DIR" && git fetch -q origin && git checkout main && git pull -q --rebase
+# (2) 開分支
+git checkout -b "design/sprint-${N}-components"
+# (3) empty commit
+git commit --allow-empty -q -m "chore: [WIP] start design #${DESIGN_ISSUE}"
+# (4) push + draft PR
+git push -u -q origin "design/sprint-${N}-components"
+DRAFT=$(gh pr create --draft --title "[WIP] 🎨 Sprint ${N} UI dataset" \
+  --body "Closes #${DESIGN_ISSUE}
 
-Refs #{design_issue_number}"
-git push -u origin "design/sprint-{N}-components"
-DRAFT=$(gh pr create --draft --title "[WIP] 🎨 Sprint {N} UI Component Dataset" \
-  --body "Closes #{design_issue_number}
-
-[WIP] Skeleton committed; tokens + components + handoff in progress." \
-  --label "design" --json number --jq .number)
+[WIP] Tokens + components in progress." --label "design" --json number --jq .number)
 ```
+
+**完成這 4 步才能開始 Read design source / 寫 tokens**。
 
 ### 5b. 實作每 ~3 個元件 commit + push
 
