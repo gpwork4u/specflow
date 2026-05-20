@@ -93,11 +93,42 @@ docker compose down
 
 ---
 
-## 4. PR + auto-merge（無 per-PR review）
+## 4. PR + auto-merge（deliver-first：先 draft 後 ready）
+
+### 4a. 開分支立刻發 draft PR（commit-before-stop hard rule）
 
 ```bash
-PR_NUM=$(gh pr create --title "{Issue 標題}" --label "feature,${LANE}" \
-  --milestone "${SPRINT}" --body "$(cat <<'BODY'
+git checkout -b feature/${ISSUE_NUM}-{desc}
+# 最小骨架：依 spec .md 的「需建立檔案」清單建空檔，每個只放一行 stub
+mkdir -p dev/src/{routes,models,validators,middleware}
+touch dev/src/routes/{name}.ts dev/src/models/{name}.ts  # ...
+echo "// stub for #${ISSUE_NUM} — WIP" > dev/src/index.ts
+git add -A && git commit -q -m "chore: scaffold for #${ISSUE_NUM}
+
+Refs #${ISSUE_NUM}"
+git push -u origin "feature/${ISSUE_NUM}-{desc}"
+DRAFT_PR=$(gh pr create --draft --title "[WIP] {Issue 標題}" \
+  --body "Closes #${ISSUE_NUM}
+
+[WIP] Skeleton committed; implementation in progress." \
+  --label "feature,${LANE}" --milestone "${SPRINT}" --json number --jq .number)
+echo "draft PR #${DRAFT_PR} created — deliverable now in GitHub"
+```
+
+### 4b. 實作期間每 ~10 檔 commit + push（PR 自動跟上）
+
+```bash
+git add -A && git commit -q -m "feat: <progress描述>
+
+Refs #${ISSUE_NUM}"
+git push
+```
+
+### 4c. 收尾改 ready + auto-merge
+
+```bash
+PR_NUM="${DRAFT_PR}"
+gh pr edit "$PR_NUM" --title "{Issue 標題}" --body "$(cat <<'BODY'
 ## Summary
 {實作摘要}
 ## Changes
@@ -112,8 +143,8 @@ PR_NUM=$(gh pr create --title "{Issue 標題}" --label "feature,${LANE}" \
 ## Related Issues
 Closes #{issue_number}
 BODY
-)" --json number --jq .number)
-
+)"
+gh pr ready "$PR_NUM"
 gh pr checks "$PR_NUM" --watch || { echo "🔴 build-and-lint 失敗，修完再來"; exit 1; }
 gh pr merge "$PR_NUM" --squash --delete-branch
 ```

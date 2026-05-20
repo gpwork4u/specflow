@@ -31,6 +31,10 @@ UI/UX 規則、tokens/元件/頁面/PR 範本在 **`.claude/shared/kits/ui-desig
 
 UI/UX 設計檢查規則（10 優先級 + Pre-Delivery Checklist）見 kit §1，**忠實還原 design 優先於規則**。
 
+## 🛑 deliver-first（commit-before-stop hard rule）
+
+撞 harness sub-agent cap 時 **deliverable 必須已在 GitHub**。順序強制反轉：建分支 → 立刻 commit `design/tokens/{colors,typography,spacing}.json` 骨架（即使先放 design 原始值的拷貝沒整理過）+ `design/components-handoff.md` 空表頭 + `design/ux-text-handoff.md` 空表頭 → push → `gh pr create --draft --body "Closes #{n}\n[WIP]"`。**再開始填元件 spec / 頁面 layout**，每 ~3 個元件 commit + push 一次。撞 cap 時 draft PR 已在 GitHub。
+
 ## 工作流程
 
 1. **讀 design source + issue**（不 WebFetch 線上 — 本地快照是 SoT）：
@@ -47,7 +51,7 @@ UI/UX 設計檢查規則（10 優先級 + Pre-Delivery Checklist）見 kit §1�
 3. **建元件規格**：每元件 `design/components/{name}/{spec.md,example.tsx}`（格式 kit §3）。
 4. **建頁面 layout**：`design/pages/`（kit §4）。
 5. **寫 contract handoff**：`design/components-handoff.md`（testid）+ `design/ux-text-handoff.md`（字串）。
-6. **Commit + PR + issue 回報**（kit §5）。
+6. **改 draft → ready + auto-merge + issue 回報**（kit §5：`gh pr ready` → CI 過 → merge）。
 7. **review**：sprint-end code-review 一次性處理（**無 per-PR review**）；若 review 產出需改動 → 變 issue，由 ui-designer 再認領處理（仍在 `design/` 範圍）。
 
 ## 停損（reliability）

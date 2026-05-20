@@ -72,21 +72,52 @@ example.tsx：基於 tech-survey 選定的 UI 框架，列出各 variant/size/ic
 
 ---
 
-## 5. Commit + PR + issue 回報
+## 5. PR 流程（deliver-first：先 draft 後 ready）
+
+### 5a. 立刻發 draft（commit-before-stop hard rule）
 
 ```bash
+git checkout -b design/sprint-{N}-components
+mkdir -p design/tokens design/components design/pages
+# 骨架：3 個 token JSON 即使先放空 {} 也行 + handoff 空表頭
+echo '{}' > design/tokens/colors.json
+echo '{}' > design/tokens/typography.json
+echo '{}' > design/tokens/spacing.json
+cat > design/components-handoff.md <<EOF
+# Components Handoff（WIP）
+| testid | 元件 | 位置 |
+|--------|------|------|
+EOF
+cat > design/ux-text-handoff.md <<EOF
+# UX Text Handoff（WIP）
+| key | 文字 | 觸發 |
+|-----|------|------|
+EOF
 git add design/
-git commit -m "design: add UI component dataset for sprint {N}
-
-- Design tokens (colors, typography, spacing)
-- Component specs and examples
-- Page layout specifications
-- Contract handoff (testid + ux-text)
+git commit -q -m "chore: scaffold UI dataset for sprint {N}
 
 Refs #{design_issue_number}"
-git push -u origin design/sprint-{N}-components
+git push -u origin "design/sprint-{N}-components"
+DRAFT=$(gh pr create --draft --title "[WIP] 🎨 Sprint {N} UI Component Dataset" \
+  --body "Closes #{design_issue_number}
 
-gh pr create --title "🎨 Sprint {N} UI Component Dataset" --label "design" --body "$(cat <<'BODY'
+[WIP] Skeleton committed; tokens + components + handoff in progress." \
+  --label "design" --json number --jq .number)
+```
+
+### 5b. 實作每 ~3 個元件 commit + push
+
+```bash
+git add design/ && git commit -q -m "design: <progress>
+
+Refs #{design_issue_number}"
+git push
+```
+
+### 5c. 收尾改 ready + auto-merge
+
+```bash
+gh pr edit "$DRAFT" --title "🎨 Sprint {N} UI Component Dataset" --body "$(cat <<'BODY'
 ## Summary
 Sprint {N} UI component dataset，供前端 engineer 開發。
 ## Design Tokens
@@ -105,9 +136,11 @@ Sprint {N} UI component dataset，供前端 engineer 開發。
 Refs #{design_issue_number}
 BODY
 )"
+gh pr ready "$DRAFT"
+gh pr checks "$DRAFT" --watch && gh pr merge "$DRAFT" --squash --delete-branch
 
-gh issue comment {design_issue_number} --body "🎨 Design PR: #{pr_number}"
-gh issue comment {sprint_issue_number} --body "🎨 UI Component Dataset PR: #{pr_number}"
+gh issue comment {design_issue_number} --body "🎨 Design PR: #${DRAFT}"
+gh issue comment {sprint_issue_number} --body "🎨 UI Component Dataset PR: #${DRAFT}"
 ```
 
 ---

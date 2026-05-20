@@ -62,17 +62,27 @@ cat specs/contracts/dom.md specs/contracts/ux-text.md specs/contracts.ts
 
 design 沒畫的元件/互動/文字 → **不腦補**，開 `design-question` issue 阻塞本 issue（kit §5），由 spec-writer 補回去問使用者。
 
+## 🛑 deliver-first（commit-before-stop hard rule，最重要）
+
+撞 harness sub-agent cap（~60-65 tool uses / 10 min wall-clock）時，**deliverable 必須已在 GitHub**，不能還在 working tree。順序**強制反轉**：
+
+1. 建分支 → **立刻 commit 最小骨架 + push + 開 draft PR（含 `Closes #issue`）**。即使只有空 directory + stub `index.ts`，也要先到 PR 階段
+2. 然後再迭代填內容；每 ~10 個檔案 commit 一次並 `git push`（PR 自動更新）
+3. 最後改 draft → ready for review，等 CI 過 auto-merge
+
+撞 cap 時你正進行的下一輪不會收到，但已存在的 commit 是真實 artifact。**先有 draft PR 比沒有強很多** — 下次 engineer agent 接續可直接拿 PR 推。**這條優先於下面所有「實作完才 push」的範本指引**。
+
 ## 工作流程
 
 1. **讀 issue + spec**：`gh issue view {n} --json number,title,body,labels`；`cat specs/features/f{N}-*.md specs/overview.md specs/dependencies.md`。bug issue 額外讀失敗 scenario + 重現步驟 + 對應 feature 完整 spec。
-2. **建分支**：`feature/{n}-{desc}` 或 `fix/{n}-{desc}`。
-3. **實作（dev/ 下）**：依 issue API contract / bug 描述；遵循 overview.md 架構 + 既有風格；寫 unit tests；維護 compose；自驗滿足所有 AC；確認編譯/執行/`docker compose up` 正常。
+2. **建分支 + 立刻發 draft PR**：`feature/{n}-{desc}` 或 `fix/{n}-{desc}` → commit minimal skeleton（空 src dir + stub entry + 把 spec 的 file 清單建空檔）→ `git push` → `gh pr create --draft --title "..." --body "Closes #{n}\n\n[WIP]"`。**現在 deliverable 已在 GitHub**。
+3. **實作（dev/ 下）**：依 issue API contract / bug 描述；遵循 overview.md 架構 + 既有風格；寫 unit tests；維護 compose；自驗滿足所有 AC；確認編譯/執行/`docker compose up` 正常。**每 ~10 個檔案 git commit + push 一次**（PR 自動跟上）。
 4. **push 前必跑 local-checks（強制）**：
    ```bash
    bash .claude/scripts/local-checks.sh
    ```
    含 `unit`（dev/ unit tests）+ `contract`（grep-based hardcoded testid/api/toast 檢查）。任一失敗**不准 push**（訊息會給違規檔案+行號+修法）。e2e 完整測試只在 sprint 收斂時 orchestrator 跑一次。
-5. **發 PR + auto-merge**（kit §4）：`gh pr create` → `gh pr checks --watch`（CI 只跑 build+lint）過 → `gh pr merge --squash`。CI 紅就修完再來。
+5. **改 draft → ready + auto-merge**（kit §4）：`gh pr ready {n}` → `gh pr checks --watch`（CI 只跑 build+lint）過 → `gh pr merge --squash`。CI 紅就修完再來。
 6. **issue 回報** + bug 修復額外 comment（kit §4）。
 7. 維護 `dev/docker-compose.example.yml`（入版控範本）；新增依賴服務時更新（kit §3）。
 

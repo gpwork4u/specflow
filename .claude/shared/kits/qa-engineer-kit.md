@@ -92,17 +92,51 @@ test('[Happy] 使用者建立 resource 流程', async ({ page }) => {
 
 **不要手動 `sleep`** — Playwright 自動等待元素可操作。
 
-## 5. Commit + PR + auto-merge
+## 5. PR 流程（deliver-first：先 draft 後 ready）
+
+### 5a. 立刻發 draft（commit-before-stop hard rule）
 
 ```bash
+git checkout -b test/sprint-${N}-e2e
+# 骨架：playwright.config.ts + 每 feature 一個空 spec 檔（含 import + describe 殼）
+cat > test/playwright.config.ts <<EOF
+# (配置範本見 §2)
+EOF
+for fid in f001 f002 f003 f004 f005 f006; do
+cat > "test/e2e/${fid}-stub.spec.ts" <<EOF
+import { test } from '@playwright/test';
+import { TESTIDS, API_PATHS, TOAST } from '../../specs/contracts';
+test.describe('${fid^^} — WIP', () => { test.skip('placeholder', () => {}); });
+EOF
+done
 git add test/
-git commit -m "test: e2e tests for sprint ${N}
+git commit -q -m "chore: scaffold e2e tests for sprint ${N}
 
 Refs #{qa_issue_number}"
-git push -u origin test/sprint-${N}-e2e
-PR_NUM=$(gh pr create --title "🧪 Sprint ${N} E2E Tests (Playwright)" --label "qa" \
-  --body "Refs #{qa_issue_number}" --json number --jq .number)
-gh pr checks "$PR_NUM" --watch && gh pr merge "$PR_NUM" --squash --delete-branch
+git push -u origin "test/sprint-${N}-e2e"
+DRAFT=$(gh pr create --draft --title "[WIP] 🧪 Sprint ${N} E2E Tests" \
+  --body "Closes #{qa_issue_number}
+
+[WIP] Skeleton committed; AC tests in progress." \
+  --label "qa" --json number --jq .number)
+```
+
+### 5b. 實作每 ~6 個 test commit + push
+
+```bash
+git add -A && git commit -q -m "test: AC implementations <progress>
+
+Refs #{qa_issue_number}"
+git push
+```
+
+### 5c. 收尾改 ready + auto-merge
+
+```bash
+gh pr edit "$DRAFT" --title "🧪 Sprint ${N} E2E Tests (Playwright)" \
+  --body "Closes #{qa_issue_number}"
+gh pr ready "$DRAFT"
+gh pr checks "$DRAFT" --watch && gh pr merge "$DRAFT" --squash --delete-branch
 ```
 
 ## 6. Bug issue（完整 e2e 失敗時，sprint 收斂 orchestrator 跑）

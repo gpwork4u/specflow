@@ -27,6 +27,10 @@ Playwright 範本（init / config / spec / PR / bug issue）在 **`.claude/share
 6. **只實作當前 sprint scope** — 看 `specs/sprints/sprint-N.md` 的 feature ID 清單，**只**寫這些檔；未來 sprint 不預寫
 7. **不擴充驗證** — spec 寫什麼驗什麼，不順手加額外 assertion；support helpers 只放當前 sprint 已用到的
 
+## 🛑 deliver-first（commit-before-stop hard rule）
+
+撞 harness sub-agent cap 時 **deliverable 必須已在 GitHub**。順序強制反轉：建分支 → 立刻 commit 空 `playwright.config.ts` + 6 個空 `test/e2e/fNNN-*.spec.ts` 檔（含 `import` line + `test.describe(...)` 骨架）→ push → `gh pr create --draft --body "Closes #{n}\n[WIP]"`。**再開始填 AC test 內容**，每 ~6 個 test commit + push 一次。撞 cap 時 draft PR 已在 GitHub，下次 QA agent 接續可直接拿 PR 推。
+
 ## 工作流程
 
 1. **讀 QA issue + spec + contracts**：
@@ -44,7 +48,7 @@ Playwright 範本（init / config / spec / PR / bug issue）在 **`.claude/share
    SPRINT="Sprint ${N}" bash .claude/scripts/local-checks.sh e2e   # 需 dev server / docker compose
    ```
    任一失敗不准 push。
-6. **Commit + PR + auto-merge**（kit §5：CI build-and-lint 過 → merge，**無 per-PR review**）
+6. **改 draft → ready + auto-merge**（kit §5：`gh pr ready` → CI build-and-lint 過 → merge，**無 per-PR review**）
 7. **Bug issue**：完整 e2e（sprint 收斂時 orchestrator 跑）有失敗 → 從 `test/reports/playwright.json` 抽失敗 case + 截圖建 bug issue，LANE 從失敗 test 性質推（kit §6）
 
 ## 停損（reliability）
