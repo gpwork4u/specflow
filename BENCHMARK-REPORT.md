@@ -134,3 +134,68 @@ Bash exit code 1/2 但其實命令成功。**Agent 把這當失敗 → 觸發「
 - 0 PR
 
 要復原成可繼續的狀態：手動 commit 各 branch 切回 main + 推 PR，或乾脆把工作丟掉 redo（rtk 已移除 + commit-before-stop 套上後再來一次會乾淨很多）。**沒急著做這事 — 重點是 benchmark 數據與根因已經拿到**。
+
+---
+
+# Benchmark v2（deliver-first 修正後重跑，2026-05-20）
+
+## 條件
+
+- Demo repo: 全新（v1 已 wipe）
+- Skill: branch main `b27c462` — 含 P0 deliver-first / commit-before-stop hard rule
+- 同一個 Claude design URL，spec-writer 同 prompt 自動代答
+- 同一個 4-lane 並行 dispatch（沒走 specflow:implement skill 入口）
+
+## Token / Duration（v1 vs v2）
+
+| Phase | v1 tokens | v2 tokens | Δ | v1 duration | v2 duration |
+|---|---:|---:|---:|---:|---:|
+| spec-writer | 85,065 | **64,640** | **−24%** | 7:00 | 6:05 |
+| tech-lead | 86,991 | **79,402** | **−9%** | 9:43 | 8:42 |
+| backend engineer | 71,143 | 77,107 | +8% | 5:55 | 6:51 |
+| frontend engineer | 133,591 | **110,169** | **−18%** | 9:59 | 7:11 |
+| ui-designer | 89,150 | 86,668 | −3% | 4:48 | 3:30 |
+| qa-engineer | 75,514 | 80,057 | +6% | 7:18 | 9:33 |
+| **Total** | **541,454** | **498,043** | **−8%** | **44:43** | **41:52** |
+
+額外勝利：tech-lead 的 O5 條件式 survey 在 v2 跑了 **0 次 WebSearch**（v1 是 2 次）— spec 已釘死技術棧時規則完全發揮。
+
+## 可靠度（**核心對照**）
+
+| Lane | v1 PR | v2 PR | v2 結果 |
+|---|---|---|---|
+| backend | ❌ 0 PR | ✅ **draft #12** | 238 行 / 18 檔 / F-001 完整 + 共寫 design 檔 |
+| ui-designer | ❌ 0 PR | ✅ **draft #13** | 156 行 / tokens + handoff scaffolding |
+| frontend | ❌ 0 PR | ❌ 0 PR | 違反 deliver-first（試 `npm install` 驗證 build 才打算 commit） |
+| qa | ❌ 0 PR | ⚠️ 本地 commit 90a4fe9，**未 push** | 違反 deliver-first（commit 完忘 push）|
+
+**deliver-first 成功率：v1 0/4 (0%) → v2 2/4 (50%)**。明顯改善但非完美。
+
+## 失敗分析
+
+兩個違反 deliver-first 的 agent 都不是「敢不敢」的問題而是「順序拗不過天性」：
+
+- **frontend**：拿到 issue 後本能先「我要先 set up Vite + 試 `npm install` 確認」再 commit。prompt 的「立刻 commit 骨架」沒擋住「先確認再做」的本能。
+- **qa**：commit 是做了（本地 `90a4fe9`），但 `git push` 沒跑 → 沒 PR。「commit-before-stop」變成「commit-before-stop（local-only）」。
+
+兩者都是 prompt 強度不夠。**「立刻」這詞太軟**；需要的是「在你呼叫任何其他工具之前，先跑這 4 行指令」的硬規格。
+
+## 下一步 P0（v2 後）
+
+| 項目 | 修正方向 |
+|---|---|
+| deliver-first **絕對化** | 加 hard sequence：「**第一個你會做的 tool call 必須是 `git checkout -b`；第二個必須是 `git commit -m '[WIP]' --allow-empty`；第三個必須是 `git push -u origin ...`；第四個必須是 `gh pr create --draft`**。在你做 Read spec / 確認 contract / 試 npm install **之前**」|
+| deliver-first **自驗** | agent 每 N 個 tool call 自問：「我 PR 推上去了嗎？沒推？立刻推」|
+| **共寫 demo dir race** | 4 lane 並行 dispatch 仍會互看 untracked。長遠看：走 `specflow:implement` skill 入口（它應該為每個 lane 建獨立 demo clone），不要從主 session 平行 dispatch |
+| 失敗 lane 重啟自動化 | 上面 frontend + qa 那兩個失敗的 lane，應該有 helper 偵測「assigned 但 PR 沒開」→ 自動再起一個 agent 接續 |
+
+## v2 結論
+
+| 維度 | 結果 |
+|---|---|
+| Token 率 | v2 比 v1 省 8%（具體哪 phase 省最多：spec-writer −24% / frontend −18%）|
+| 可靠度（PR 落地率）| v1 0% → v2 50%，**P0 修正方向對但強度不夠** |
+| Skill 本身結構 | 維持原架構（kit + slim prompt + deliver-first）|
+| 下一輪 P0 | deliver-first 絕對化（硬規格四步序列）+ 4-lane 共寫 race 用 specflow:implement 處理 |
+
+仍未做：未來若要 100% PR 落地，需要前述「絕對化」+ 用 specflow:implement skill 入口（內建獨立 demo dir per lane）一起套上。
