@@ -697,18 +697,19 @@ v4 benchmark 發現 `deliver-first.sh` 內部 `gh pr create` 偶發無效（手�
 
 ### Benchmark 量測（請假系統 MVP，6 features，~90-100 AC）
 
-| 維度 | v1 | v2 | v3 | v4 |
-|---|---:|---:|---:|---:|
-| Total tokens | 541K | 498K | 508K | 512K |
-| 4-lane tokens | 369K | 376K | 344K | ~342K |
-| WebSearch（tech-lead） | 2 | 0 | 1 | **0** |
-| Branch pushed to remote | 3/4 | 3/4 | 4/4 | **4/4** |
-| Agent-driven PR open | 0/4 | 2/4 | 3/4 | 2/4* |
-| End-to-end PR（含 sweep）| 0/4 | 2/4 | 3/4 | **4/4** |
-| Cross-lane working tree 污染 | n/a | 0 | 1/4 | **0/4** |
-| Token / End-to-end PR | ∞ | 249K | 169K | **128K** |
+| 維度 | v1 | v2 | v3 | v4 | v5 |
+|---|---:|---:|---:|---:|---:|
+| Total tokens | 541K | 498K | 508K | 512K | **497K** |
+| 4-lane tokens | 369K | 376K | 344K | ~342K | 353K |
+| WebSearch（tech-lead） | 2 | 0 | 1 | 0 | **0** |
+| Branch pushed to remote | 3/4 | 3/4 | 4/4 | 4/4 | **4/4** |
+| **Agent-driven PR open** | 0/4 | 2/4 | 3/4 | 2/4 | **4/4** ✅ |
+| **PRs MERGED to main** | 0/4 | 0/4 | 0/4 | 0/4 | **2/4** 🎉 |
+| End-to-end deliverable | 0/4 | 2/4 | 3/4 | 4/4 | **4/4** |
+| Cross-lane 污染 | n/a | 0 | 1/4 | 0/4 | **0/4** |
+| Token / Merged PR | ∞ | ∞ | ∞ | ∞ | **248K** |
 
-\*v4 helper 偶發 bug 在 P5 修正。P5 後預期 agent-driven PR 接近 100%；即使偶發失敗仍有 sweep 100% 兜底。
+**v5 是目前最佳狀態** — 第一次達成「agent 把 PR 從建立到 merge 端到端走完」。v1~v4 累積的修正路徑（O2 slim → P0 deliver-first → P0+ 絕對序列 → P0+1+2+3 helpers → P5 verify+retry + auto-sweep）疊起來把 reliability 從 0% PR 拉到 100% PR 開 + 50% PR merge，token 消耗持平於 v1。
 
 ### 關鍵設計原則（從 benchmark 累積出來的教訓）
 
