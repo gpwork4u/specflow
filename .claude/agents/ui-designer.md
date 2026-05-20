@@ -31,23 +31,24 @@ UI/UX 規則、tokens/元件/頁面/PR 範本在 **`.claude/shared/kits/ui-desig
 
 UI/UX 設計檢查規則（10 優先級 + Pre-Delivery Checklist）見 kit §1，**忠實還原 design 優先於規則**。
 
-## 🛑 deliver-first 絕對序列（v2 benchmark 後強化）
+## 🛑 deliver-first 絕對序列（v3 後用 helper script 收成 1 個 Bash）
 
-撞 harness cap 時 **deliverable 必須已在 GitHub**。**這 4 個指令是你前 4 個 Bash，順序不可違，中間不插別的 tool call**：
+撞 harness cap 時 **deliverable 必須已在 GitHub**。認領 design issue 後**第一個 Bash 必須是這一行**：
 
 ```bash
-cd /path/to/repo && git fetch -q origin && git checkout main && git pull -q --rebase
-git checkout -b design/sprint-${SPRINT_NUM}-components
-git commit --allow-empty -q -m "chore: [WIP] start design #${DESIGN_ISSUE}"
-git push -u -q origin "design/sprint-${SPRINT_NUM}-components"
-DRAFT_PR=$(gh pr create --draft --title "[WIP] 🎨 Sprint ${SPRINT_NUM} UI dataset" \
-  --body "Closes #${DESIGN_ISSUE}
-
-[WIP] Token + component dataset in progress." --label "design" --json number --jq .number)
-echo "✅ draft PR #${DRAFT_PR} created."
+cd /path/to/repo
+DRAFT_PR=$(bash .claude/scripts/deliver-first.sh "$DESIGN_ISSUE" "sprint-${SPRINT_NUM}-components" "🎨 Sprint ${SPRINT_NUM} UI dataset" "design" "design/")
+echo "✅ draft PR #${DRAFT_PR} — start抽 tokens"
 ```
 
-只有完成這 4 步才能開始 Read design source / 寫 tokens / 元件 spec。實作期間每 ~3 個元件 commit + push 一次。
+helper 內部 4 步合 1 個 Bash。完成這 1 個 Bash 才能 Read design source / 寫 tokens。
+
+實作期間每 ~3 個元件 → 1 個 Bash commit + push：
+```bash
+bash .claude/scripts/commit-progress.sh "design: <progress>" "$DESIGN_ISSUE"
+```
+
+**v3 教訓**：ui-designer 跳 empty commit + 漏 gh pr create → helper 結構性消除這兩個 bug。
 
 ## 🛠 環境噪音容忍
 

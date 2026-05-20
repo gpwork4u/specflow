@@ -62,33 +62,24 @@ cat specs/contracts/dom.md specs/contracts/ux-text.md specs/contracts.ts
 
 design 沒畫的元件/互動/文字 → **不腦補**，開 `design-question` issue 阻塞本 issue（kit §5），由 spec-writer 補回去問使用者。
 
-## 🛑 deliver-first 絕對序列（最重要 — v2 benchmark 後強化）
+## 🛑 deliver-first 絕對序列（v3 後用 helper script 收成 1 個 Bash）
 
-撞 harness sub-agent cap（~60-65 tool uses / 10-min wall-clock）時 **deliverable 必須已在 GitHub**。**這 4 個指令是你認領 issue 後的前 4 個 Bash 呼叫，順序不可違反，不可在中間插別的 tool call**（不可先 Read spec / 不可先 npm install / 不可先試 build）：
+撞 harness sub-agent cap 時 **deliverable 必須已在 GitHub**。認領 issue 後**第一個 Bash 必須是這一行**，中間不可插任何別的 tool call：
 
 ```bash
-# 步驟 1：fetch + rebase（防 4-lane 共寫 race）
-cd /path/to/repo && git fetch -q origin && git checkout main && git pull -q --rebase
-
-# 步驟 2：開分支
-git checkout -b feature/${ISSUE_NUM}-{短描述}
-
-# 步驟 3：empty commit 鎖 branch
-git commit --allow-empty -q -m "chore: [WIP] start #${ISSUE_NUM}"
-
-# 步驟 4：push + 開 draft PR
-git push -u -q origin "feature/${ISSUE_NUM}-{短描述}"
-DRAFT_PR=$(gh pr create --draft --title "[WIP] {issue 標題}" \
-  --body "Closes #${ISSUE_NUM}
-
-[WIP] Implementation in progress." \
-  --label "feature,${LANE}" --milestone "${SPRINT}" --json number --jq .number)
-echo "✅ draft PR #${DRAFT_PR} created — deliverable now in GitHub. Begin implementation."
+cd /path/to/repo
+DRAFT_PR=$(bash .claude/scripts/deliver-first.sh "$ISSUE_NUM" "$SLUG" "$TITLE" "feature,$LANE")
+echo "✅ draft PR #${DRAFT_PR} created"
 ```
 
-**只有完成步驟 1-4 才能開始 Read spec / 寫 code / 跑 npm install**。每個 issue 都這樣做。為什麼這麼硬：v2 benchmark 顯示 frontend agent 拗於「先確認再 commit」，qa agent 拗於「commit 完忘 push」，**任何「先驗證再做」的本能都會在撞 cap 時讓 deliverable 失蹤**。
+helper 內部會做：fetch + rebase main → 開 branch → empty commit → push + `gh pr create --draft`，**4 步合 1 個 Bash**。完成這 1 個 Bash 才能開始 Read spec / 寫 code / 跑 npm install。
 
-實作期間每 ~10 個檔案動到 → `git add -A && git commit -m "feat: <desc>" && git push`（PR 自動跟上）。
+為什麼用 helper：v2/v3 顯示 agent 拗於「先驗證再 commit」或漏第 4 步開 PR。把 4 步包成 1 個 script，agent 只能 all-or-nothing 執行，徹底結構性消除漏步問題。
+
+實作期間每 ~10 個檔案 → 用另一個 helper 1 個 Bash 完成 commit + push：
+```bash
+bash .claude/scripts/commit-progress.sh "feat: <progress描述>" "$ISSUE_NUM"
+```
 
 完工：`gh pr ready "$DRAFT_PR"` → `gh pr checks --watch` → `gh pr merge --squash --delete-branch`。
 

@@ -49,6 +49,15 @@ fi
 # ---- 5. doctor.sh 可跑且不誤殺 ----
 if sh -n "$SC/doctor.sh" 2>/dev/null; then ok "doctor.sh 語法正確"; else bad "doctor.sh 語法錯誤"; fi
 
+# ---- 6. deliver-first.sh / commit-progress.sh / dispatch-impl.sh / sweep-missing-prs.sh ----
+# 這 4 個 helper 把 agent 的 deliver-first 4 步壓到 1 個 Bash call，是 v4 後可靠度核心
+HELPER_OK=1
+for h in deliver-first commit-progress dispatch-impl sweep-missing-prs; do
+  [ -x "$SC/$h.sh" ] || { bad "$h.sh 不存在或非可執行"; HELPER_OK=0; continue; }
+  sh -n "$SC/$h.sh" 2>/dev/null || { bad "$h.sh 語法錯誤"; HELPER_OK=0; }
+done
+[ "$HELPER_OK" -eq 1 ] && ok "v4 reliability helpers 全部就緒（deliver-first/commit-progress/dispatch-impl/sweep-missing-prs）"
+
 echo "----------------------------------------"
 echo "selftest: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

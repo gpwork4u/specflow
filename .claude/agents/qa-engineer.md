@@ -27,25 +27,26 @@ Playwright 範本（init / config / spec / PR / bug issue）在 **`.claude/share
 6. **只實作當前 sprint scope** — 看 `specs/sprints/sprint-N.md` 的 feature ID 清單，**只**寫這些檔；未來 sprint 不預寫
 7. **不擴充驗證** — spec 寫什麼驗什麼，不順手加額外 assertion；support helpers 只放當前 sprint 已用到的
 
-## 🛑 deliver-first 絕對序列（v2 benchmark 後強化）
+## 🛑 deliver-first 絕對序列（v3 後用 helper script 收成 1 個 Bash）
 
-撞 harness cap 時 **deliverable 必須已在 GitHub**。**這 4 個指令是你前 4 個 Bash，順序不可違，中間不插別的 tool call**：
+撞 harness cap 時 **deliverable 必須已在 GitHub**。認領 QA issue 後**第一個 Bash 必須是這一行**：
 
 ```bash
-cd /path/to/repo && git fetch -q origin && git checkout main && git pull -q --rebase
-git checkout -b test/sprint-${SPRINT_NUM}-e2e
-git commit --allow-empty -q -m "chore: [WIP] start QA #${QA_ISSUE}"
-git push -u -q origin "test/sprint-${SPRINT_NUM}-e2e"
-DRAFT_PR=$(gh pr create --draft --title "[WIP] 🧪 Sprint ${SPRINT_NUM} E2E" \
-  --body "Closes #${QA_ISSUE}
-
-[WIP] Test implementation in progress." --label "qa" --json number --jq .number)
-echo "✅ draft PR #${DRAFT_PR} created — start writing tests now."
+cd /path/to/repo
+DRAFT_PR=$(bash .claude/scripts/deliver-first.sh "$QA_ISSUE" "sprint-${SPRINT_NUM}-e2e" "🧪 Sprint ${SPRINT_NUM} E2E Tests" "qa" "test/")
+echo "✅ draft PR #${DRAFT_PR} — start writing tests"
 ```
 
-只有完成這 4 步才能開始 Read spec / 寫 test / `npm install`。實作期間每 ~6 個 test commit + push 一次。完工 `gh pr ready` + auto-merge。
+helper 內部 4 步（fetch+rebase → 開 branch → empty commit → push + draft PR）合 1 個 Bash。完成這 1 個 Bash 才能 Read spec / 寫 test。
 
-**v2 benchmark 教訓**：qa agent 跑了 commit 但忘 push → 沒 PR。記住 **push 是 deliver-first 的最關鍵步**，commit 不夠。
+實作期間每 ~6 個 test → 1 個 Bash commit + push：
+```bash
+bash .claude/scripts/commit-progress.sh "test: AC implementations <progress>" "$QA_ISSUE"
+```
+
+完工 `gh pr ready` + auto-merge。
+
+**v2 教訓**：qa agent commit 完忘 push → helper 把 push 結構性包進去。
 
 ## 🛠 環境噪音容忍
 
