@@ -37,6 +37,7 @@
   - [文件共存原則](#文件共存原則)
 - [引用與致謝](#引用與致謝)
 - [自訂與擴展](#自訂與擴展)
+- [版本歷程](#版本歷程)
 - [授權](#授權)
 
 ---
@@ -623,6 +624,105 @@ UI Designer agent 的設計規則參考自 [UI/UX Pro Max](https://github.com/ne
 ### 新增 Skill
 
 在 `.claude/skills/{name}/SKILL.md` 建立新檔案，即可用 `/{name}` 呼叫。
+
+---
+
+## 版本歷程
+
+SpecFlow skill 結構演化紀錄。每一輪都基於 benchmark 量測 + 失敗根因分析後再迭代。詳細實測數據見 [`BENCHMARK-REPORT.md`](./BENCHMARK-REPORT.md)。
+
+### 演化軌跡
+
+```
+O1 / O5 / state.sh 並發鎖   →  Slim agent prompts  →  Deliver-first  →  Helper scripts  →  Verify + retry
+（infra reliability）           （−64.7% 常駐 prompt）  （v1→v2→v3）        （v3→v4）         （v5）
+```
+
+### 各階段重點
+
+#### O1 / O5 / Infra（commit `fe4a524`、`70d081d`）
+
+- **O1**：tech-lead 開 feature issue 不貼 spec 全文，只放路徑 + 3 行摘要（避免 engineer/QA/review/verifier 重複付費 + 與 spec 檔案漂移）
+- **O5**：tech-lead 條件式 survey — spec 已釘死技術棧時跳過 WebSearch
+- **state.sh 並發鎖**：lane 制最多 5 個背景 agent 同時寫 `.specflow/state.json`，flock / mkdir 退級鎖防 lost-update
+- **resume 去脆弱**：GitHub 實況優先 + 子字串模糊比對
+- **「無進展即停」停損規則**：同題試 2 次未解 → issue 留言並停止，不繞圈燒 turn
+
+#### O2 Slim agent prompts（commit `0ec27a6` ~ `a1a5ccf`，merged in `953af51`）
+
+把長範例 / 重複 JSON / 範本移到 `.claude/shared/kits/`（按需 Read 非常駐），規則改精簡祈使句。
+
+| Agent | 常駐 prompt 行數 | Δ |
+|---|---:|---:|
+| spec-writer | 832 → 127 | −85% |
+| tech-lead | 584 → 78 | −87% |
+| engineer | 499 → 89 | −82% |
+| ui-designer | 437 → 55 | −87% |
+| verifier | 368 → 52 | −86% |
+| qa-engineer | 233 → 52 | −78% |
+| code-review | 192 → 192 | 0%（已精簡刻意保留） |
+| **合計** | **3145 → 645** | **−79%** |
+
+字元計算：常駐 prompt token 估算 −64.7%。Kit 約 9.5K token 按需 Read 一次，非每 turn 重付。
+
+#### P0 Deliver-first（commit `b27c462`）
+
+v1 benchmark 顯示 4 個 lane agent 全部撞 harness sub-agent cap（~60-65 tool uses / 10-min wall-clock）**前 deliverable 還沒到位** — 0 PR、0 merge。
+
+修正：engineer / qa-engineer / ui-designer 強制反轉順序 — 建分支 → 立刻 commit 骨架 → push → 開 draft PR → **然後**才迭代。撞 cap 時 draft PR 已存在，下次 agent 可接續。
+
+#### P0+ Absolute sequence（commit `22cd5f1`）
+
+v2 benchmark 顯示 deliver-first 只達 50% — frontend agent 試 `npm install` 先沒推、qa agent commit 完忘 push。
+
+修正：序列絕對化，agent 認領 issue 後**前 4 個 Bash 必須是** `fetch+rebase → checkout -b → empty commit → push + gh pr create --draft`。加環境噪音容忍規則 + 跨 lane race 規則。
+
+#### P0+1+2+3 Helper scripts（commit `989d020`）
+
+v3 仍有 25% PR 漏（ui-designer 跳 empty commit + 漏 gh pr create）。引入 4 個 helper script 把 deliver-first 4 步壓成 1 個 Bash call，結構性消除漏步：
+
+| Script | 作用 |
+|---|---|
+| `deliver-first.sh` | 4 步合 1 個 Bash：fetch+rebase → 開 branch → empty commit → push + draft PR |
+| `commit-progress.sh` | git add+commit+push 三合一（實作期間每次 commit 從 3 turn 省到 1） |
+| `dispatch-impl.sh` | 為每 lane 建立 isolated demo clone（`/tmp/specflow-lane-clones/...-<lane>/`）杜絕 cross-lane working tree 污染 |
+| `sweep-missing-prs.sh` | 掃所有 push 了但沒 PR 的 branch，自動補開 draft PR（從 commit message 抓 `#N` 推 issue） |
+
+#### P5 Verify + retry + auto-sweep（commit `2a913ae`）
+
+v4 benchmark 發現 `deliver-first.sh` 內部 `gh pr create` 偶發無效（手動同 args 跑卻成功）。修正：
+
+- **`deliver-first.sh`**：加 explicit `--head <BRANCH> --base main` 避開 gh 自動偵測；PR 建立後**主動 verify**（不信 gh exit code），最多 retry 3 次中間 sleep 2s 防 GitHub API indexing race
+- **`state.sh lane-close`**：寫完 state 後自動觸發 `sweep-missing-prs.sh` 兜底，lane drain 後不依賴 orchestrator 記得手動跑
+
+### Benchmark 量測（請假系統 MVP，6 features，~90-100 AC）
+
+| 維度 | v1 | v2 | v3 | v4 |
+|---|---:|---:|---:|---:|
+| Total tokens | 541K | 498K | 508K | 512K |
+| 4-lane tokens | 369K | 376K | 344K | ~342K |
+| WebSearch（tech-lead） | 2 | 0 | 1 | **0** |
+| Branch pushed to remote | 3/4 | 3/4 | 4/4 | **4/4** |
+| Agent-driven PR open | 0/4 | 2/4 | 3/4 | 2/4* |
+| End-to-end PR（含 sweep）| 0/4 | 2/4 | 3/4 | **4/4** |
+| Cross-lane working tree 污染 | n/a | 0 | 1/4 | **0/4** |
+| Token / End-to-end PR | ∞ | 249K | 169K | **128K** |
+
+\*v4 helper 偶發 bug 在 P5 修正。P5 後預期 agent-driven PR 接近 100%；即使偶發失敗仍有 sweep 100% 兜底。
+
+### 關鍵設計原則（從 benchmark 累積出來的教訓）
+
+1. **可靠度 > 省 token**：瘦身漏掉一條架構關鍵規則比不瘦身更糟。所有 hard gate（contract 三件套、frontend pixel-perfect、E2E workflow gate、sprint scope gate）的 bash 留在精簡 prompt **行內**，不移 kit
+2. **frontmatter maxTurns 不是 hard limit**：v3 觀察到每個 agent 都跑過 frontmatter 設的上限，真正的 cap 來自 harness 端（~60-65 tool uses / 10 min wall-clock）
+3. **保險帶比保險閘穩**：與其追求 100% helper 成功，不如保證「branch push + 安全網掃描」雙保險
+4. **prompt 強度有極限**：v2→v3 把「立刻 commit」改成「絕對序列」只把可靠度從 50% → 75%；要繼續上靠的是「把流程壓成 1 個 script 讓 agent 不可能漏步」這種結構性手段
+5. **multi-agent 共寫同 dir 是真實 race**：worktree 隔離只隔 agent 自己的工作空間；4 個 agent cd 到同一 demo dir 仍會互看 untracked 檔，需要 per-lane clone（不只 worktree）解
+
+### 持續改進方向
+
+- 觀察 `deliver-first.sh` retry 機制在實際使用中的命中率
+- 把 sweep 接到 GitHub Actions 在 sprint workflow 失敗時也跑
+- 抽 BENCHMARK-REPORT.md 的「演化」作 case study 給其他 multi-agent skill 開發者參考
 
 ---
 
