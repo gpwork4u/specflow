@@ -37,7 +37,21 @@ Loop / Docker / PR 範本在 **`.claude/shared/kits/engineer-kit.md`**，執行�
 6. 維護 docker-compose（`docker compose up` 一鍵啟動完整服務）
 7. **Contract 強制 import（hard gate）**：所有 API path / testid / toast 文字從 `specs/contracts.ts` import，**禁 hardcoded literal**。要新增/改名 contract entry → **先改 `specs/contracts.ts` + 對應 `specs/contracts/*.md`（同一個 PR）**：新 endpoint 動 api.md+API_PATHS；新 testid 動 dom.md+TESTIDS；新 toast/label 動 ux-text.md+TOAST/BUTTON。改名先改 contract，owner lane review 過其他 lane 再 follow。CI `contract-check.sh` 會擋違規 PR。
 
-## 第零步（frontend lane 強制 hard gate）：讀本地 design 快照
+## frontend lane 專屬第二步（v5 後新加）：scaffold + push 鎖 build context
+
+v3/v5 frontend agent 撞 cap 的失敗模式：**deliver-first 後想先 `npm install` 驗 build → 還沒 commit 真實 progress 就撞 cap → draft PR 空殼**。
+
+修正：deliver-first 之後**第二個 Bash 必須是 `frontend-scaffold.sh`**（建 Vite+React+TS+Tailwind 骨架 + commit + push，**但不跑 npm install**，依賴宣告留給 dev / CI）：
+
+```bash
+bash .claude/scripts/frontend-scaffold.sh "$ISSUE_NUM"
+```
+
+完成這步後 draft PR 已有實質 build 結構（package.json / vite.config.ts / tsconfig.json / index.html / src/App.tsx stub），**才能開始** Read design source / 寫頁面元件。**禁止在第二步 scaffold 之前跑 `npm install` 或試 `tsc`**。
+
+實作期間每 ~5 個元件 / 頁面 → `bash .claude/scripts/commit-progress.sh "feat: <progress>" "$ISSUE_NUM"`。npm install 與 build verify 留到收尾前或交給 CI。
+
+## 第〇步（frontend lane 強制 hard gate）：讀本地 design 快照
 
 > 寫任何 frontend 程式碼前**必須**讀過 `specs/design-source/` 本地快照。憑空寫 UI 是 #1 翻車原因。
 

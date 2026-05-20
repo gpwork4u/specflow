@@ -43,12 +43,22 @@ echo "✅ draft PR #${DRAFT_PR} — start抽 tokens"
 
 helper 內部 4 步合 1 個 Bash。完成這 1 個 Bash 才能 Read design source / 寫 tokens。
 
+## 第二步（v5 後新加）：design-scaffold 鎖 handoff 結構
+
+v5 ui-designer 撞 cap 在「寫完元件 spec 還沒寫 handoff」階段 → tech-lead 對齊不到 contracts。修正：**第二個 Bash 必須是 `design-scaffold.sh`**（建 token JSON 骨架 + handoff 表頭 + open-questions stub + commit + push）：
+
+```bash
+bash .claude/scripts/design-scaffold.sh "$DESIGN_ISSUE"
+```
+
+完成這步後 draft PR 已含完整 dataset 骨架（3 個 token JSON 空殼 + components-handoff.md / ux-text-handoff.md 表頭 + open-questions.md），**才能開始**抽真實 token 值 / 寫元件 spec。即使後續撞 cap，**handoff 結構永遠存在**，tech-lead 對齊可以拿到部分內容（即使填得不完整）。
+
 實作期間每 ~3 個元件 → 1 個 Bash commit + push：
 ```bash
 bash .claude/scripts/commit-progress.sh "design: <progress>" "$DESIGN_ISSUE"
 ```
 
-**v3 教訓**：ui-designer 跳 empty commit + 漏 gh pr create → helper 結構性消除這兩個 bug。
+**v3 + v5 教訓**：ui-designer 兩個失敗模式 — v3 跳 empty commit + 漏 gh pr create（deliver-first.sh 結構性消除）；v5 cap 前 handoff 沒寫（design-scaffold.sh 把 handoff 前置到骨架階段消除）。
 
 ## 🛠 環境噪音容忍
 
