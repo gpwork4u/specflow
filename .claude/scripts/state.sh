@@ -146,6 +146,13 @@ case "$cmd" in
       *) echo "lane must be feature|design|qa|bug" >&2; exit 1 ;;
     esac
     _locked w_lane_close "$lane"
+    # v5 P5.2: lane-close 後自動跑 sweep-missing-prs 兜底
+    # 為什麼放 lock 外：sweep 跑 gh API 可能秒級慢，不該卡住其他 state.sh 寫入
+    # 環境變數 SPECFLOW_SKIP_SWEEP=1 可關（測試用）
+    if [ -z "${SPECFLOW_SKIP_SWEEP:-}" ] && [ -x .claude/scripts/sweep-missing-prs.sh ]; then
+      echo "🔧 lane-close $lane → 自動跑 sweep-missing-prs.sh 兜底..." >&2
+      bash .claude/scripts/sweep-missing-prs.sh 2>&1 | sed 's/^/  [sweep] /' >&2 || true
+    fi
     ;;
   lane-status)
     ensure_state

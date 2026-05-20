@@ -47,16 +47,46 @@ git commit --allow-empty -q -m "chore: [WIP] start #${ISSUE_NUM}"
 # 步驟 4: push + open draft PR
 git push -u -q origin "${BRANCH}"
 
-# 已有 PR 就不重開
+# v5: 已有 PR 就不重開（idempotent）
 EXISTING_PR=$(gh pr list --head "${BRANCH}" --json number --jq '.[0].number' 2>/dev/null || true)
 if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
   echo "$EXISTING_PR"
-else
-  gh pr create --draft \
-    --title "[WIP] ${TITLE}" \
-    --body "Closes #${ISSUE_NUM}
+  exit 0
+fi
+
+# v5: 用 explicit --head + --base 避開 gh 自動偵測（v4 design/frontend 雷區）
+# 把 stderr 留 capture 進 PR_OUT，方便 debug
+PR_CREATE_OUT=$(gh pr create --draft \
+  --head "${BRANCH}" --base main \
+  --title "[WIP] ${TITLE}" \
+  --body "Closes #${ISSUE_NUM}
 
 [WIP] Implementation in progress. Created by deliver-first.sh." \
-    --label "${LABELS}" \
-    --json number --jq .number
+  --label "${LABELS}" 2>&1 || true)
+
+# v5: PR 建立後**主動 verify**（不信任 gh exit code），最多 retry 2 次防 GitHub API indexing race
+PR_NUM=""
+for try in 1 2 3; do
+  PR_NUM=$(gh pr list --head "${BRANCH}" --json number --jq '.[0].number' 2>/dev/null || true)
+  [ -n "$PR_NUM" ] && [ "$PR_NUM" != "null" ] && break
+  # 沒看到 PR，等 2 秒讓 API indexing 跟上，第 2 次重跑 gh pr create
+  sleep 2
+  if [ "$try" -eq 2 ]; then
+    PR_CREATE_OUT=$(gh pr create --draft \
+      --head "${BRANCH}" --base main \
+      --title "[WIP] ${TITLE}" \
+      --body "Closes #${ISSUE_NUM}
+
+[WIP] Implementation in progress. Created by deliver-first.sh (retry)." \
+      --label "${LABELS}" 2>&1 || true)
+  fi
+done
+
+if [ -z "$PR_NUM" ] || [ "$PR_NUM" = "null" ]; then
+  echo "🔴 deliver-first.sh: gh pr create 失敗 3 次。最後輸出：" >&2
+  echo "$PR_CREATE_OUT" >&2
+  echo "（branch 已 push，sweep-missing-prs.sh 之後會兜底補開）" >&2
+  exit 1
 fi
+
+echo "$PR_NUM"
