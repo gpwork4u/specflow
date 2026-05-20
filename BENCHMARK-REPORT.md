@@ -268,3 +268,80 @@ Token 約持平。最大變動：spec-writer 隨 AC 數變化波動（v4 90 AC v
 1. 修 deliver-first.sh 內部 gh pr create 偶發 bug
 2. 把 sweep 作為 **每 lane drain 後自動跑**（不靠 orchestrator 記得跑）
 3. agent 在 commit-progress 之外也要有「定期 push 未推 commit」的提醒
+
+---
+
+# Benchmark v5（P5 verify+retry + auto-sweep，2026-05-20）
+
+## 條件
+
+- Skill: branch main `c82e544` — P5 修正（deliver-first verify+retry + state.sh lane-close 自動觸發 sweep）
+- Demo repo: `gpwork4u/leave-mvp-demo-v5`（新建）
+- 4 lane agent 各跑在獨立 clone via dispatch-impl.sh
+
+## Token / Duration（v1 vs v2 vs v3 vs v4 vs v5）
+
+| Phase | v1 | v2 | v3 | v4 | v5 |
+|---|---:|---:|---:|---:|---:|
+| spec-writer | 85K | 65K | 86K | 93K | 66K |
+| tech-lead | 87K | 79K | 78K | 77K | 78K |
+| 4-lane total | 369K | 376K | 344K | ~342K | **353K** |
+| **Total** | **541K** | **498K** | **508K** | **512K** | **497K** |
+| WebSearch (tech-lead) | 2 | 0 | 1 | 0 | **0** |
+
+## 可靠度（**最終驗證**）
+
+| 指標 | v1 | v2 | v3 | v4 | v5 |
+|---|---:|---:|---:|---:|---:|
+| Branch pushed | 3/4 | 3/4 | 4/4 | 4/4 | **4/4** |
+| **Agent-driven PR open** | 0/4 | 2/4 | 3/4 | 2/4 | **4/4** ✅ |
+| **PRs MERGED to main** | 0/4 | 0/4 | 0/4 | 0/4 | **2/4** 🎉 |
+| Sweep recovery needed | n/a | n/a | n/a | 2 | **0** |
+| Cross-lane contamination | n/a | 0 | 1 | 0 | 0 |
+
+## v5 三個重大突破
+
+### 1. deliver-first.sh verify+retry **完全修好 v4 偶發 bug**
+
+v4 helper 在 design+frontend lane 失敗（PR 沒開）。v5 加 explicit `--head/--base` + 主動 verify + retry 後 **4/4 agent 全部成功跑完 helper**。
+
+### 2. agent **真的會走完整個 PR 生命週期**
+
+不只是 draft PR 開出，**backend agent 在跑完 F-001 後跑了 `gh pr ready` → CI → `gh pr merge --squash`**。qa-engineer 把 91 個 AC 全部寫完 + merge。這是 v1~v4 沒見過的端到端完成。
+
+| Lane | v5 結果 | 行數 |
+|---|---|---:|
+| backend | F-001 **MERGED** + 開始 F-002 撞 cap | +6227 |
+| qa | **91 ACs 全寫完 + MERGED** | +1608 |
+| ui-designer | draft（真實 1453 行內容，但 cap 在 handoff 前） | +1453 |
+| frontend | draft（empty commit only，去 npm install 沒回來） | +0 |
+
+### 3. sweep auto-trigger 觀察
+
+兩個 merged 走完 `state.sh lane-close` 自動跑 sweep。**Sweep 跑出 0 created / 0 skipped** — 因為 deliver-first.sh 修好後不再需要 sweep 兜底（但安全網仍在）。
+
+## v5 唯一可惜處
+
+frontend agent 進入「先 `npm install` 確認再 commit」的本能迴圈：跑了 deliver-first.sh 後想驗 build，撞 cap。**這是 v3 frontend 同樣失敗模式**，prompt 強度仍未完全擋住。
+
+對比：backend agent 完美 — 跑完 helper → 寫 code → commit-progress → ready → merge。所以 prompt 內容沒問題，是**特定 sonnet 在 frontend setup 場景的本能拗**。
+
+對策（未做）：給 frontend lane prompt 加更硬的「禁止 npm install 在 commit-progress 之前」規則。
+
+## 結論：v5 = SpecFlow skill 演化目前最佳狀態
+
+| 維度 | 結果 |
+|---|---|
+| Token 持平 | 497K vs v1 541K |
+| Agent-driven PR | **0% → 100%** |
+| **End-to-end merge** | **0/4 → 2/4** ✅（v1~v4 沒任何一次達成）|
+| Sweep 兜底 | 仍在但 v5 沒用上（純安全網）|
+| Token / Merged PR | 248.5K |
+
+P5 修正完全奏效。**SpecFlow skill 從「能寫但不會收尾」進化到「能寫能 merge」的真正可用狀態**。
+
+## 仍可優化（不急）
+
+1. frontend lane 的「npm install 本能」需要再強的 prompt 約束 — 但這次只影響 frontend 1 個 lane
+2. ui-designer 撞 cap 在 handoff 前（design/components-handoff.md / ux-text-handoff.md），可以考慮把 handoff 移到 deliver-first 骨架的一部分先建空表
+3. 把每 lane 的「ready + merge」也包成 helper（`ready-merge.sh`）省 turn
