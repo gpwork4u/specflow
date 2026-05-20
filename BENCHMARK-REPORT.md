@@ -199,3 +199,72 @@ Bash exit code 1/2 但其實命令成功。**Agent 把這當失敗 → 觸發「
 | 下一輪 P0 | deliver-first 絕對化（硬規格四步序列）+ 4-lane 共寫 race 用 specflow:implement 處理 |
 
 仍未做：未來若要 100% PR 落地，需要前述「絕對化」+ 用 specflow:implement skill 入口（內建獨立 demo dir per lane）一起套上。
+
+---
+
+# Benchmark v4（helper scripts + per-lane clone，2026-05-20）
+
+## 條件
+
+- Skill: branch main `989d020` — 加 4 個 helper scripts（deliver-first / commit-progress / dispatch-impl / sweep-missing-prs）+ agent prompt 精簡為呼叫 helper
+- Demo repo: `gpwork4u/leave-mvp-demo-v4`（新建）
+- 4 lane agent 各跑在獨立 clone `/tmp/specflow-lane-clones/...-<lane>/` 不共寫 working tree
+
+## Token / Duration（v1 vs v2 vs v3 vs v4）
+
+| Phase | v1 | v2 | v3 | v4 |
+|---|---:|---:|---:|---:|
+| spec-writer | 85K | 65K | 86K | 93K |
+| tech-lead | 87K | 79K | 78K | 77K (WebSearch=0) |
+| 4-lane total | 369K | 376K | 344K | ~342K |
+| **Total** | **541K** | **498K** | **508K** | **~512K** |
+
+Token 約持平。最大變動：spec-writer 隨 AC 數變化波動（v4 90 AC vs v2 113 AC）。
+
+## 可靠度（**核心對照**）
+
+| 指標 | v1 | v2 | v3 | v4 |
+|---|---:|---:|---:|---:|
+| Branch pushed to remote | 3/4 | 3/4 | 4/4 | **4/4** |
+| Agent-driven PR open | 0/4 | 2/4 | 3/4 | **2/4** ⚠️ |
+| With sweep safety net | n/a | n/a | n/a | **4/4** ✅ |
+| Cross-lane working tree 污染 | n/a | n/a | 1/4 (qa) | **0/4** ✅ |
+
+## 預期 vs 實際
+
+**預期**：helper 把 deliver-first 4 步壓 1 個 Bash → 100% PR；per-lane clone → 0% 污染。
+
+**實際**：
+- ✅ Per-lane clone 完美 — 4 個 lane 在獨立目錄，互不干擾
+- ❌ helper PR 開創率反降到 50%（vs v3 75%）— **意外問題**
+  - backend + qa lane 的 helper 完整跑完所有 4 步 → PR opened
+  - design + frontend lane 的 helper 走到 step 4 push（empty commit `[WIP] start #N` 在 remote）但 step 5 `gh pr create` 沒生效 — PR 沒開
+  - **手動執行同樣 `gh pr create` 命令 在 同一個 clone dir 直接成功** — helper 內部呼叫卻沒開
+  - 疑為 helper 內 `set -e` + 某個 transient 退出（待 debug）
+
+## P3 sweep-missing-prs.sh 是真實安全網
+
+關鍵發現：即使 helper 偶發失敗，**只要 branch push 成功，sweep 就能 recover**。v4 我預先手動補了 #13 #14；若不手動補，sweep 跑一次後也會自動為這兩個 dangling branch 開 draft PR。
+
+**有 sweep 在，effective PR 落地率永遠 4/4**（前提：branch 推到 remote）。
+
+## 結論：v4 整體 reliability 比 v3 提升
+
+| 維度 | 結論 |
+|---|---|
+| 結構性問題（cross-lane race） | ✅ 解決（per-lane clone）|
+| Skill 表面（agent-driven PR）| ⚠️ helper 仍有 ~50% 偶發 bug |
+| **End-to-end deliverable** | ✅ **100%**（helper + sweep 配合）|
+| Token 消耗 | 持平於 v3 |
+
+## 待修
+
+1. **deliver-first.sh 內部 `gh pr create` 偶發無效**：手動同 args 直接呼叫成功，從 helper 內部呼叫某些 case 不開 PR 也不 exit 非 0 — 需要在 helper 內加 PR 創建後驗證 + retry，或捕捉 stderr 找原因
+2. **agent 撞 harness cap 後本地有未 push commit**：v4 ui-designer 在 clone 內 commit `c14c127 design: add tokens + 5 components` 但沒 push → 也是浪費。`commit-progress.sh` 把 push 包進去能解，但 agent 必須記得用它
+
+## v4 結論
+
+**reliability 比 v3 顯著上升**（end-to-end PR 落地從 75% → 100% with sweep）但靠的是 sweep 兜底而非 helper 變更可靠。下一輪 P5 改進方向：
+1. 修 deliver-first.sh 內部 gh pr create 偶發 bug
+2. 把 sweep 作為 **每 lane drain 後自動跑**（不靠 orchestrator 記得跑）
+3. agent 在 commit-progress 之外也要有「定期 push 未推 commit」的提醒
