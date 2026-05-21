@@ -37,7 +37,7 @@ Loop / Docker / PR 範本在 **`.claude/shared/kits/engineer-kit.md`**，執行�
 6. 維護 docker-compose（`docker compose up` 一鍵啟動完整服務）
 7. **Contract 強制 import（hard gate）**：所有 API path / testid / toast 文字從 `specs/contracts.ts` import，**禁 hardcoded literal**。要新增/改名 contract entry → **先改 `specs/contracts.ts` + 對應 `specs/contracts/*.md`（同一個 PR）**：新 endpoint 動 api.md+API_PATHS；新 testid 動 dom.md+TESTIDS；新 toast/label 動 ux-text.md+TOAST/BUTTON。改名先改 contract，owner lane review 過其他 lane 再 follow。CI `contract-check.sh` 會擋違規 PR。
 
-## frontend lane 專屬第二步（v5 後新加）：scaffold + push 鎖 build context
+## Step 2 `[frontend]`：frontend-scaffold + push 鎖 build context
 
 v3/v5 frontend agent 撞 cap 的失敗模式：**deliver-first 後想先 `npm install` 驗 build → 還沒 commit 真實 progress 就撞 cap → draft PR 空殼**。
 
@@ -51,7 +51,7 @@ bash .claude/scripts/frontend-scaffold.sh "$ISSUE_NUM"
 
 實作期間每 ~5 個元件 / 頁面 → `bash .claude/scripts/commit-progress.sh "feat: <progress>" "$ISSUE_NUM"`。npm install 與 build verify 留到收尾前或交給 CI。
 
-## 第〇步（frontend lane 強制 hard gate）：讀本地 design 快照
+## Step 3 `[frontend]`（強制 hard gate）：讀本地 design 快照
 
 > 寫任何 frontend 程式碼前**必須**讀過 `specs/design-source/` 本地快照。憑空寫 UI 是 #1 翻車原因。
 
@@ -76,7 +76,7 @@ cat specs/contracts/dom.md specs/contracts/ux-text.md specs/contracts.ts
 
 design 沒畫的元件/互動/文字 → **不腦補**，開 `design-question` issue 阻塞本 issue（kit §5），由 spec-writer 補回去問使用者。
 
-## 🛑 deliver-first 絕對序列（v3 後用 helper script 收成 1 個 Bash）
+## Step 1 🛑 deliver-first（所有 lane，v3 後用 helper script 收成 1 個 Bash）
 
 撞 harness sub-agent cap 時 **deliverable 必須已在 GitHub**。認領 issue 後**第一個 Bash 必須是這一行**，中間不可插任何別的 tool call：
 
@@ -95,7 +95,7 @@ helper 內部會做：fetch + rebase main → 開 branch → empty commit → pu
 bash .claude/scripts/commit-progress.sh "feat: <progress描述>" "$ISSUE_NUM"
 ```
 
-完工：`gh pr ready "$DRAFT_PR"` → `gh pr checks --watch` → `gh pr merge --squash --delete-branch`。
+完工：1 個 Bash 收尾 `bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"`（draft→ready→等 CI→squash merge 三合一；CI 紅會 exit 1 讓你去修）。
 
 ## 🛠 環境噪音容忍規則（v2 後新加）
 
@@ -123,19 +123,22 @@ Bash 工具呼叫遇到以下訊號**不算失敗，繼續往下做**：
 - 你 `git add` 時只 add 自己這次寫的具體路徑（不用 `git add -A`，用 `git add dev/src/...`）
 - 看到 conflict 時：`git status` 看是哪個檔，跑 `git pull --rebase origin {your-branch}` 嘗試自動 resolve；無法 resolve 就用對方版本 + commit「chore: rebase」
 
-## 工作流程
+## 每個 issue 的執行順序（總覽 — 嚴格照此 Step）
 
-1. **讀 issue + spec**：`gh issue view {n} --json number,title,body,labels`；`cat specs/features/f{N}-*.md specs/overview.md specs/dependencies.md`。bug issue 額外讀失敗 scenario + 重現步驟 + 對應 feature 完整 spec。
-2. **執行 deliver-first 絕對序列（前 4 個 Bash 呼叫）**：見上方 🛑 deliver-first 段落。完成後 `$DRAFT_PR` 已在 GitHub。
-3. **實作（dev/ 下）**：依 issue API contract / bug 描述；遵循 overview.md 架構 + 既有風格；寫 unit tests；維護 compose；自驗滿足所有 AC；確認編譯/執行/`docker compose up` 正常。**每 ~10 個檔案 git commit + push 一次**（PR 自動跟上）。
-4. **push 前必跑 local-checks（強制）**：
-   ```bash
-   bash .claude/scripts/local-checks.sh
-   ```
-   含 `unit`（dev/ unit tests）+ `contract`（grep-based hardcoded testid/api/toast 檢查）。任一失敗**不准 push**（訊息會給違規檔案+行號+修法）。e2e 完整測試只在 sprint 收斂時 orchestrator 跑一次。
-5. **改 draft → ready + auto-merge**（kit §4）：`gh pr ready {n}` → `gh pr checks --watch`（CI 只跑 build+lint）過 → `gh pr merge --squash`。CI 紅就修完再來。
-6. **issue 回報** + bug 修復額外 comment（kit §4）。
-7. 維護 `dev/docker-compose.example.yml`（入版控範本）；新增依賴服務時更新（kit §3）。
+> 這是權威順序。各 Step 細節在下方同名段落。`[frontend]` 標記僅 frontend lane 做。
+
+| Step | 動作 | 細節段落 |
+|------|------|---------|
+| **1** | 認領 issue 後**第一個 Bash 必須是 `deliver-first.sh`**（draft PR 落 GitHub）| 🛑 deliver-first |
+| **2** `[frontend]` | **第二個 Bash 必須是 `frontend-scaffold.sh`**（Vite 骨架，不跑 npm install）| [frontend] frontend-scaffold |
+| **3** `[frontend]` | 讀 `specs/design-source/` 本地快照（pixel-perfect 前提）| [frontend] 讀 design 快照 |
+| **4** | 讀 issue + spec：`gh issue view {n} --json ...`；`cat specs/features/f{N}-*.md overview.md dependencies.md`。bug 額外讀失敗 scenario + 重現步驟 | — |
+| **5** | 實作（`dev/` 下）：依 API contract / bug 描述，遵循 overview.md 架構 + 既有風格；寫 unit tests；維護 compose；自驗所有 AC。**每 ~10 檔跑 `commit-progress.sh` push 一次** | — |
+| **6** | push 前 / merge 前跑 `bash .claude/scripts/local-checks.sh`（unit + contract，任一紅不准 ready）| — |
+| **7** | `gh pr ready $DRAFT_PR` → `gh pr checks --watch`（CI build+lint）→ `gh pr merge --squash --delete-branch` → issue 回報 → loop 下一個 issue | 🛑 deliver-first 末段 |
+
+> Step 5 的 docker-compose.example.yml 維護見 kit §3；issue 回報 / bug 修復 comment 見 kit §4。
+> npm install 與完整 build verify 留到 Step 6/7 或交給 CI，**不要在 Step 1-4 之間跑**（v3/v5 frontend 撞 cap 主因）。
 
 ## 程式碼規範
 

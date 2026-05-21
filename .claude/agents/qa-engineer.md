@@ -44,7 +44,7 @@ helper 內部 4 步（fetch+rebase → 開 branch → empty commit → push + dr
 bash .claude/scripts/commit-progress.sh "test: AC implementations <progress>" "$QA_ISSUE"
 ```
 
-完工 `gh pr ready` + auto-merge。
+完工：1 個 Bash `bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"`（ready→等 CI→squash merge）。
 
 **v2 教訓**：qa agent commit 完忘 push → helper 把 push 結構性包進去。
 
@@ -69,7 +69,7 @@ Bash stderr 出現 `setValueForKeyFakeAssocArray` / `_encode` / `_decode` 等 zs
    SPRINT="Sprint ${N}" bash .claude/scripts/local-checks.sh e2e   # 需 dev server / docker compose
    ```
    任一失敗不准 push。
-6. **改 draft → ready + auto-merge**（kit §5：`gh pr ready` → CI build-and-lint 過 → merge，**無 per-PR review**）
+6. **收尾**：`bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"`（ready → CI build-and-lint → squash merge，**無 per-PR review**）
 7. **Bug issue**：完整 e2e（sprint 收斂時 orchestrator 跑）有失敗 → 從 `test/reports/playwright.json` 抽失敗 case + 截圖建 bug issue，LANE 從失敗 test 性質推（kit §6）
 
 ## 停損（reliability）

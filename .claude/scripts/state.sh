@@ -10,8 +10,9 @@ set -eu
 #   state.sh phase <phase-id> <next-action>    # 紀錄目前 phase + 下一步
 #   state.sh agent-add <type> <issue> <pr> <branch> <status>
 #   state.sh agent-done <pr>                   # 從 in_flight 移除
-#   state.sh lane-close <feature|design|qa|bug>   # 標記 lane 全關
+#   state.sh lane-close <feature|design|qa|bug>   # 標記 lane 全關（自動觸發 sweep-missing-prs）
 #   state.sh lane-status                          # 印 4 lane 狀態
+#   state.sh lane-track <lane> <field> <value>    # 記 lane clone_path / draft_pr / last_sha（resume 用）
 #   state.sh log <message>                     # append 一行 audit log
 #   state.sh show                              # 印出整份 state
 #
@@ -42,6 +43,7 @@ ensure_state() {
     "qa": false,
     "bug": false
   },
+  "lane_state": {},
   "sprint_base_sha": null,
   "sprint_test_outcome": null,
   "sprint_review_outcome": null,
@@ -112,6 +114,15 @@ w_lane_close() {
   mv "$tmp" "$STATE_FILE"
   echo "[$(now)] lane-close $lane" >> "$LOG_FILE"
 }
+# lane-track：記錄每 lane 的 clone_path / draft_pr / last_sha（給 resume + sweep 用）
+# 用 --arg 處理 lane key（可含 hyphen 如 engineer-backend），不走 dot-path 避免 jq 誤判
+w_lane_track() {
+  lane="$1"; field="$2"; value="$3"
+  tmp=$(mktemp)
+  jq --arg l "$lane" --arg f "$field" --arg v "$value" --arg ts "$(now)" \
+    '.lane_state[$l] = ((.lane_state[$l] // {}) + {($f): $v}) | .updated_at = $ts' "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
 
 case "$cmd" in
   init)
@@ -157,6 +168,11 @@ case "$cmd" in
   lane-status)
     ensure_state
     jq -r '.lane_closed | to_entries[] | "\(.key)=\(.value)"' "$STATE_FILE"
+    ;;
+  lane-track)
+    ensure_state
+    [ -z "${1:-}" ] || [ -z "${2:-}" ] && { echo "usage: lane-track <lane> <field> <value>" >&2; exit 1; }
+    _locked w_lane_track "$1" "$2" "${3:-}"
     ;;
   log)
     ensure_state

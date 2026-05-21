@@ -51,14 +51,16 @@ v5 ui-designer 撞 cap 在「寫完元件 spec 還沒寫 handoff」階段 → te
 bash .claude/scripts/design-scaffold.sh "$DESIGN_ISSUE"
 ```
 
-完成這步後 draft PR 已含完整 dataset 骨架（3 個 token JSON 空殼 + components-handoff.md / ux-text-handoff.md 表頭 + open-questions.md），**才能開始**抽真實 token 值 / 寫元件 spec。即使後續撞 cap，**handoff 結構永遠存在**，tech-lead 對齊可以拿到部分內容（即使填得不完整）。
+完成這步後 draft PR 已含 3 個 token JSON 空殼 + open-questions.md，**才能開始**抽真實 token 值 / 寫元件 spec。
 
-實作期間每 ~3 個元件 → 1 個 Bash commit + push：
+**優先序（v6 教訓）**：把 budget 花在**元件 spec + 真實 token 值**（這是 engineer 真正要用的）。`components-handoff.md` / `ux-text-handoff.md` 是**事後驗證低價值**（tech-lead 在 contract phase 已直接寫好 contracts/dom + ux-text），**留到最後有餘力才寫**，不要為它犧牲元件 spec。
+
+**每寫完 1-2 個元件就 commit + push**（不要批次到最後 — v6 ui-designer 把元件 spec 攢到最後沒 push 就撞 cap，只剩 scaffold 的 62 行）：
 ```bash
-bash .claude/scripts/commit-progress.sh "design: <progress>" "$DESIGN_ISSUE"
+bash .claude/scripts/commit-progress.sh "design: add <元件名> spec" "$DESIGN_ISSUE"
 ```
 
-**v3 + v5 教訓**：ui-designer 兩個失敗模式 — v3 跳 empty commit + 漏 gh pr create（deliver-first.sh 結構性消除）；v5 cap 前 handoff 沒寫（design-scaffold.sh 把 handoff 前置到骨架階段消除）。
+**v3/v5/v6 教訓**：v3 跳 empty commit + 漏 gh pr create（deliver-first.sh 消除）；v5 寫 1453 行但 cap 前 handoff 沒寫（可接受 — handoff 低價值）；v6 為了寫 handoff stub 反而元件 spec 只剩 62 行（**過猶不及** → v7 把 handoff 移出 scaffold，元件 spec 優先 + 頻繁 push）。
 
 ## 🛠 環境噪音容忍
 

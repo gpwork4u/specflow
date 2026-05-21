@@ -41,7 +41,16 @@ echo "✅ Sprint $SPRINT_NUM scope: $FIDS"
 
 > **Design-led 專案特殊規則**：若 `specs/design-source.md` 存在，`contracts/dom.md` 與 `ux-text.md` **直接抄自 ui-designer handoff**（`design/components-handoff.md` → dom.md；`design/ux-text-handoff.md` → ux-text.md）。不自創 testid/UI 字串；handoff 有缺漏先回去找 ui-designer 補。`contracts/api.md` 仍由 tech-lead 設計（API 在 design 上看不到）。
 
-寫完 commit + push，每個 feature/qa issue body 必加 `### Contracts` section 引用對應 §。**contract 沒寫完，不開 issue。**
+寫完 contract 後 commit，**必須 push 到 origin/main 並自驗成功**（hard rule — v5 曾因 push 被擋沒 retry，導致 per-lane clone 抓不到 contract）：
+
+```bash
+git add specs/ dev/ && git commit -q -m "tech-lead: tech-survey + contracts + dependencies + docker-compose"
+git push origin main
+# 自驗 origin/main 真的含此 commit；失敗 retry 1 次
+git ls-remote origin main | grep -q "$(git rev-parse HEAD)" || { sleep 2; git push origin main; git ls-remote origin main | grep -q "$(git rev-parse HEAD)" || echo "🔴 push 失敗，contract 沒上 origin，lane clone 會抓不到"; }
+```
+
+每個 feature/qa issue body 必加 `### Contracts` section 引用對應 §。**contract 沒寫完 / 沒 push 成功，不開 issue。**
 
 ## 第四步：依賴分析
 

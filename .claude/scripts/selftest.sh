@@ -52,11 +52,17 @@ if sh -n "$SC/doctor.sh" 2>/dev/null; then ok "doctor.sh 語法正確"; else bad
 # ---- 6. reliability helpers（deliver-first / commit-progress / dispatch-impl / sweep / lane-scaffold） ----
 # 這些 helper 把 agent 的多步流程壓到 1 個 Bash call，是 v4+ 後可靠度核心
 HELPER_OK=1
-for h in deliver-first commit-progress dispatch-impl sweep-missing-prs frontend-scaffold design-scaffold; do
+for h in deliver-first commit-progress dispatch-impl sweep-missing-prs frontend-scaffold design-scaffold ready-and-merge; do
   [ -x "$SC/$h.sh" ] || { bad "$h.sh 不存在或非可執行"; HELPER_OK=0; continue; }
   sh -n "$SC/$h.sh" 2>/dev/null || { bad "$h.sh 語法錯誤"; HELPER_OK=0; }
 done
-[ "$HELPER_OK" -eq 1 ] && ok "v6 reliability helpers 全部就緒（4 個核心 + 2 個 lane-specific scaffold）"
+[ "$HELPER_OK" -eq 1 ] && ok "reliability helpers 全部就緒（deliver-first/commit-progress/dispatch-impl/sweep/frontend-scaffold/design-scaffold/ready-and-merge）"
+
+# ---- 7. state.sh lane-track（lane_state 欄位 + hyphen-safe key）----
+cp "$SC/state.sh" state2.sh 2>/dev/null || cp "$SC/state.sh" "$T/state2.sh"
+bash state2.sh lane-track "engineer-backend" clone_path "/tmp/x" >/dev/null 2>&1 || true
+LT=$(jq -r '.lane_state["engineer-backend"].clone_path // empty' .specflow/state.json 2>/dev/null)
+[ "$LT" = "/tmp/x" ] && ok "state.sh lane-track 正常（hyphen key 安全）" || bad "state.sh lane-track 回歸"
 
 echo "----------------------------------------"
 echo "selftest: $PASS passed, $FAIL failed"

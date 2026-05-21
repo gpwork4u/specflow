@@ -60,59 +60,27 @@ cat > design/tokens/spacing.json <<'EOF'
 }
 EOF
 
-# Handoff stubs — tech-lead 在 contract phase 對齊用，必須**先存在**
-cat > design/components-handoff.md <<EOF
-# Components Handoff (WIP — Refs #${ISSUE_NUM})
-
-> 從 \`specs/design-source/components.jsx\` + \`pages-*.jsx\` 抽出的 testid 對應表。
-> tech-lead 在 contract phase 吸進 \`specs/contracts/dom.md\`。
-
-| testid | 元件 | 出現位置 | 備註 |
-|--------|------|---------|------|
-
-EOF
-
-cat > design/ux-text-handoff.md <<EOF
-# UX Text Handoff (WIP — Refs #${ISSUE_NUM})
-
-> 從 \`specs/design-source/\` 抽出的面向使用者字串對應表。
-> tech-lead 在 contract phase 吸進 \`specs/contracts/ux-text.md\`。
-
-## Toast
-| key | 文字 | 觸發情境 |
-|-----|------|---------|
-
-## Button labels
-| key | 文字 | 出現位置 |
-|-----|------|---------|
-
-## Form labels
-| key | 文字 | 表單 |
-|-----|------|------|
-
-## Status labels
-| key | 文字 | 狀態 |
-|-----|------|------|
-
-EOF
-
 cat > design/open-questions.md <<EOF
 # Open Questions (Refs #${ISSUE_NUM})
 
-> design 沒明確涵蓋的情境記在這裡（hover / empty / error / a11y 違規等），
-> **不腦補**自行補設定。
+> design 沒明確涵蓋的情境記在這裡（hover / empty / error / a11y 違規等），**不腦補**自行補設定。
 
 EOF
 
-# commit + push
+# v7 註：handoff 表（components-handoff.md / ux-text-handoff.md）刻意**不**在 scaffold 建立。
+# 原因：tech-lead 在 contract phase 已直接從 design-source 寫好 contracts/dom.md + ux-text.md，
+# handoff 是事後驗證（低價值），不該佔 scaffold budget。ui-designer 把 budget 花在元件 spec
+# （v5 模式產 1400+ 行 vs v6 加 handoff stub 只剩 62 行）。handoff 若有餘力收尾再寫。
+
+# commit + push（只推 token shell + open-questions，很輕）
 if [ -x .claude/scripts/commit-progress.sh ]; then
-  bash .claude/scripts/commit-progress.sh "chore: scaffold design dataset skeleton (tokens + handoff stubs)" "$ISSUE_NUM"
+  bash .claude/scripts/commit-progress.sh "chore: scaffold design tokens skeleton + open-questions" "$ISSUE_NUM"
 else
   git add design/
-  git commit -q -m "chore: scaffold design dataset skeleton
+  git commit -q -m "chore: scaffold design tokens skeleton
 
 Refs #${ISSUE_NUM}"
   git push -q
 fi
 
-echo "✅ design scaffold committed + pushed (tokens JSON + handoff 表頭 + open-questions 全建立，後續填內容)"
+echo "✅ design scaffold committed + pushed (3 token JSON shell + open-questions；handoff 留收尾寫，優先元件 spec)"
