@@ -345,3 +345,43 @@ P5 修正完全奏效。**SpecFlow skill 從「能寫但不會收尾」進化到
 1. frontend lane 的「npm install 本能」需要再強的 prompt 約束 — 但這次只影響 frontend 1 個 lane
 2. ui-designer 撞 cap 在 handoff 前（design/components-handoff.md / ux-text-handoff.md），可以考慮把 handoff 移到 deliver-first 骨架的一部分先建空表
 3. 把每 lane 的「ready + merge」也包成 helper（`ready-merge.sh`）省 turn
+
+---
+
+# Benchmark v6 + Skill Review（lane-scaffold + P7 修正，2026-05-20~21）
+
+## v6 結果（lane-specific scaffold）
+
+| Lane | v5 | v6 | 觀察 |
+|---|---|---|---|
+| backend | MERGED 6227 | **MERGED** 5822 | 持平 |
+| qa | MERGED 1608 | ready(未 merge) 1772 | 內容+ merge− |
+| frontend | draft 0 行 | draft **79 行** | frontend-scaffold 生效 |
+| ui-designer | draft 1453 | draft **62 行** | design-scaffold 反吃 budget |
+
+v6 端到端 merge 1/4（v5 是 2/4）— **退步**；但 PR 有實質內容 4/4（v5 3/4）。
+
+**教訓**：frontend-scaffold 划算（0→79 行）；design-scaffold 不划算（1453→62 行，handoff 低價值卻吃 budget）。
+
+## Skill Review 最大發現
+
+`specflow:implement` skill（用戶實際入口）**沒接 v3~v6 任何 helper** — 仍用無效的 `isolation="worktree"`，沒 dispatch-impl / deliver-first / sweep。等於 6 輪修正對「直接 invoke skill 的使用者」看不見。詳見 `SKILL-REVIEW.md`。
+
+## P7 修正（全做）
+
+| P7.x | 修正 | 等級 |
+|---|---|---|
+| 7.1 | specflow:implement skill 改寫接 dispatch-impl + deliver-first + sweep（移除 isolation=worktree）| CRITICAL |
+| 7.2 | tech-lead.md push 自驗硬規（git ls-remote 驗 origin 含 commit + retry）| HIGH |
+| 7.3 | design-scaffold 縮小（拆 handoff 表頭，優先元件 spec + 頻繁 push）| HIGH |
+| 7.4 | engineer.md 編號統一（Step 1-7 總覽表，frontend-only 標 [frontend]）| MEDIUM |
+| 7.5 | state.sh lane_state 欄位 + lane-track 指令（hyphen-safe，給 resume/sweep）| MEDIUM |
+| 7.6 | ready-and-merge.sh helper（draft→ready→CI→merge 三合一）| LOW |
+
+selftest 8/8 PASS。
+
+## 最終狀態
+
+SpecFlow skill 現在從**用戶實際入口（/specflow:implement）**就能跑到 v6-level 可靠度（per-lane clone + deliver-first + sweep 兜底 + ready-merge）。先前 6 輪 benchmark 都繞過 skill 從主 session 手動 dispatch，P7.1 補上這個關鍵 gap。
+
+未驗證：P7 改動後的 skill 入口尚未跑過完整 benchmark（v7）。預期等同 v5/v6 但用戶 invoke 也能複現。
