@@ -67,11 +67,14 @@ helper 內部把 fetch+rebase → 開 branch → empty commit → push + 開 dra
 
 ```bash
 [ ! -f specs/design-source/index.html ] && { echo "🔴 design 快照不存在，請 spec-writer 跑 sync-design.sh"; exit 1; }
+head -20 specs/design-source.md   # 看攝取格式：bundle=元件在 *.jsx / html=在 index.html
 gh issue view "$ISSUE_NUM" --json body --jq .body | sed -n '/^## Design Reference/,/^## /p'
-grep -A 30 'data-testid="sent-record-card"' specs/design-source/index.html   # 找對應元件
+grep -rn -A 20 'data-testid="sent-record-card"' specs/design-source/   # 找對應元件（bundle 落在 *.jsx）
 ls specs/design-source/screenshots/   # Read tool 可直接讀 PNG 對照視覺
 cat specs/contracts/dom.md specs/contracts/ux-text.md specs/contracts.ts
 ```
+
+> **bundle 格式**（`specs/design-source.md` 標 `攝取格式: bundle`）：元件結構 / testid / 字串在 `specs/design-source/*.jsx`，`index.html` 只是 babel loader 殼——grep `*.jsx` 不是 index.html。設計意圖另見 `specs/design-source/chats/`。
 
 **不 WebFetch 線上 URL** — 本地快照是 sprint 的 SoT。發現過舊 → 找 spec-writer 重跑 sync-design.sh，不自己決定要不要重抓。
 

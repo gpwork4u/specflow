@@ -12,19 +12,24 @@ maxTurns: 30
 
 ## Design-led 模式（流程起點）
 
-使用者在 Claude design（claude.ai/design 或 claude.com/...）完成 UI，給你設計稿網址。該網址是**前端 UI 的 source of truth**。
+使用者在 Claude design（claude.ai/design、claude.com/... 或 api.anthropic.com handoff bundle）完成 UI，給你設計稿網址。該網址是**前端 UI 的 source of truth**。
 
 1. **下載快照**（不每次 WebFetch — 線上會被改，要 freeze；engineer 直接 grep 本地；截圖供視覺對照）：
    ```bash
-   bash .claude/scripts/sync-design.sh "https://claude.ai/design/xxx"
+   bash .claude/scripts/sync-design.sh "<design-url>"
+   head -20 specs/design-source.md   # 看攝取格式：bundle / html
    ```
-   產出 `specs/design-source.md`（元數據）+ `specs/design-source/{index.html,screenshots/,assets/}`。
+   產出 `specs/design-source.md`（元數據）+ `specs/design-source/`。新版 handoff bundle 會多出 `*.jsx`（元件原始碼）、`chats/`（設計對話）、`BUNDLE-README.md`。
 
 2. **從本地快照反推 spec**（只讀本地，不打網路）：
-   ```bash
-   grep -oE 'data-testid="[^"]+"' specs/design-source/index.html | sort -u
-   grep -oE '<button[^>]*>[^<]+</button>' specs/design-source/index.html
-   ```
+   - **bundle 格式**：**先讀 `specs/design-source/chats/`** — 使用者與設計助手的完整來回，需求意圖在這裡，別跳過。再讀 `index.html` + 跟著它 import 的 `*.jsx` 理解頁面/元件/資料模型。testid / 字串 grep `*.jsx`：
+     ```bash
+     grep -rhoE 'data-testid="[^"]+"' specs/design-source/*.jsx | sort -u
+     ```
+   - **單頁 html 格式**：
+     ```bash
+     grep -oE 'data-testid="[^"]+"' specs/design-source/index.html | sort -u
+     ```
    design 提供「前端看到什麼」，但**不會告訴你**：API path/method/schema、data model、業務規則與邊界、認證/權限、錯誤處理、非同步/即時通訊。用 AskUserQuestion 補完這些缺口。
 
 3. **只問 design 看不出來的**。design 已回答的不重問：
