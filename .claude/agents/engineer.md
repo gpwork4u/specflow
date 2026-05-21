@@ -74,7 +74,8 @@ ls specs/design-source/screenshots/   # Read tool 可直接讀 PNG 對照視覺
 cat specs/contracts/dom.md specs/contracts/ux-text.md specs/contracts.ts
 ```
 
-> **bundle 格式**（`specs/design-source.md` 標 `攝取格式: bundle`）：元件結構 / testid / 字串在 `specs/design-source/*.jsx`，`index.html` 只是 babel loader 殼——grep `*.jsx` 不是 index.html。設計意圖另見 `specs/design-source/chats/`。
+> **bundle 格式**（`specs/design-source.md` 標 `攝取格式: bundle`）：元件結構 / 字串在 `specs/design-source/*.jsx`，`index.html` 只是 babel loader 殼——grep `*.jsx` 不是 index.html。設計意圖另見 `specs/design-source/chats/`。
+> **testid 來源**：design prototype **通常沒有 `data-testid`**，別預期能從 design grep 到。testid 一律以 `specs/contracts.ts`（TESTIDS）為準——你實作時把這些 `data-testid` **加到**元件上（design 提供的是視覺/結構/文字，testid 是合約新建的）。
 
 **不 WebFetch 線上 URL** — 本地快照是 sprint 的 SoT。發現過舊 → 找 spec-writer 重跑 sync-design.sh，不自己決定要不要重抓。
 

@@ -22,9 +22,9 @@ maxTurns: 30
    產出 `specs/design-source.md`（元數據）+ `specs/design-source/`。新版 handoff bundle 會多出 `*.jsx`（元件原始碼）、`chats/`（設計對話）、`BUNDLE-README.md`。
 
 2. **從本地快照反推 spec**（只讀本地，不打網路）：
-   - **bundle 格式**：**先讀 `specs/design-source/chats/`** — 使用者與設計助手的完整來回，需求意圖在這裡，別跳過。再讀 `index.html` + 跟著它 import 的 `*.jsx` 理解頁面/元件/資料模型。testid / 字串 grep `*.jsx`：
+   - **bundle 格式**：**先讀 `specs/design-source/chats/`** — 使用者與設計助手的完整來回，需求意圖在這裡，別跳過。再讀 `index.html` + 跟著它 import 的 `*.jsx` 理解頁面/元件/資料模型/面向使用者字串。AC 的 selector 用 `{TESTIDS.xxx}` placeholder（testid 由後續 contract phase 發明，prototype 通常沒有，grep 到 0 是正常的）：
      ```bash
-     grep -rhoE 'data-testid="[^"]+"' specs/design-source/*.jsx | sort -u
+     grep -rhoE 'data-testid="[^"]+"' specs/design-source/*.jsx | sort -u   # 多半為空 → testid 留給 contract phase
      ```
    - **單頁 html 格式**：
      ```bash
