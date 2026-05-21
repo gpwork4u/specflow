@@ -44,7 +44,7 @@ helper 內部 4 步（fetch+rebase → 開 branch → empty commit → push + dr
 bash .claude/scripts/commit-progress.sh "test: AC implementations <progress>" "$QA_ISSUE"
 ```
 
-完工：1 個 Bash `bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"`（ready→等 CI→squash merge）。
+完工：1 個 Bash `bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"`（ready→等 CI→squash merge）。**不要**手動查 CI 設定 / 跑 npm install 驗證 — 沒 build-lint CI 就是過，helper 已處理（v7 教訓：別「先搞懂再動作」撞 cap）。
 
 **v2 教訓**：qa agent commit 完忘 push → helper 把 push 結構性包進去。
 

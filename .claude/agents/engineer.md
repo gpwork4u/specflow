@@ -97,6 +97,11 @@ bash .claude/scripts/commit-progress.sh "feat: <progress描述>" "$ISSUE_NUM"
 
 完工：1 個 Bash 收尾 `bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"`（draft→ready→等 CI→squash merge 三合一；CI 紅會 exit 1 讓你去修）。
 
+**🚫 收尾禁止「先搞懂再動作」本能（v7 教訓）**：
+- **不要**手動跑 `gh pr checks` 調查 CI 設定、不要去看 `.github/workflows/`、不要研究「為什麼只有 security check 沒 build-lint」。**沒設 build-lint CI 就是過** — `ready-and-merge.sh` 已處理 no-CI 情況。
+- **不要**為了「確認能 build」而在收尾前補跑 `npm install` / `tsc` / `vite build`。本地 `local-checks.sh`（Step 6）過了就夠；完整 build verify 交給 CI（有的話）或 sprint e2e。
+- v7 backend agent 因為去查 CI workflow、frontend agent 因為想 npm install 驗 build，都在 merge 前撞 cap。**信任 helper，直接跑，省下的 turn 拿去做下一個 issue。**
+
 ## 🛠 環境噪音容忍規則（v2 後新加）
 
 Bash 工具呼叫遇到以下訊號**不算失敗，繼續往下做**：
@@ -135,7 +140,7 @@ Bash 工具呼叫遇到以下訊號**不算失敗，繼續往下做**：
 | **4** | 讀 issue + spec：`gh issue view {n} --json ...`；`cat specs/features/f{N}-*.md overview.md dependencies.md`。bug 額外讀失敗 scenario + 重現步驟 | — |
 | **5** | 實作（`dev/` 下）：依 API contract / bug 描述，遵循 overview.md 架構 + 既有風格；寫 unit tests；維護 compose；自驗所有 AC。**每 ~10 檔跑 `commit-progress.sh` push 一次** | — |
 | **6** | push 前 / merge 前跑 `bash .claude/scripts/local-checks.sh`（unit + contract，任一紅不准 ready）| — |
-| **7** | `gh pr ready $DRAFT_PR` → `gh pr checks --watch`（CI build+lint）→ `gh pr merge --squash --delete-branch` → issue 回報 → loop 下一個 issue | 🛑 deliver-first 末段 |
+| **7** | 收尾**只准跑** `bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"`（ready→等 CI→squash merge 三合一）→ issue 回報 → loop 下一個 issue | 🛑 deliver-first 末段 |
 
 > Step 5 的 docker-compose.example.yml 維護見 kit §3；issue 回報 / bug 修復 comment 見 kit §4。
 > npm install 與完整 build verify 留到 Step 6/7 或交給 CI，**不要在 Step 1-4 之間跑**（v3/v5 frontend 撞 cap 主因）。
