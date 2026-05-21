@@ -74,24 +74,13 @@ example.tsx：基於 tech-survey 選定的 UI 框架，列出各 variant/size/ic
 
 ## 5. PR 流程（deliver-first：先 draft 後 ready）
 
-### 5a. 認領 design issue 後的前 4 個 Bash（不可插別的 tool call）
+### 5a. 認領 design issue 後第一個 Bash（deliver-first，不可插別的 tool call）
 
 ```bash
-# (1) fetch + rebase
-cd "$DEMO_DIR" && git fetch -q origin && git checkout main && git pull -q --rebase
-# (2) 開分支
-git checkout -b "design/sprint-${N}-components"
-# (3) empty commit
-git commit --allow-empty -q -m "chore: [WIP] start design #${DESIGN_ISSUE}"
-# (4) push + draft PR
-git push -u -q origin "design/sprint-${N}-components"
-DRAFT=$(gh pr create --draft --title "[WIP] 🎨 Sprint ${N} UI dataset" \
-  --body "Closes #${DESIGN_ISSUE}
-
-[WIP] Tokens + components in progress." --label "design" --json number --jq .number)
+DRAFT=$(bash .claude/scripts/deliver-first.sh "$DESIGN_ISSUE" "sprint-${N}-components" "🎨 Sprint ${N} UI dataset" "design" "design/")
 ```
 
-**完成這 4 步才能開始 Read design source / 寫 tokens**。
+script 把 fetch+rebase → 開 branch → empty commit → push + draft PR 4 步合 1（含 retry / idempotent）。**完成這 1 個 Bash 才能開始 Read design source / 寫 tokens**。不要手打這 4 步。
 
 ### 5b. 實作每 ~3 個元件 commit + push
 
@@ -124,8 +113,7 @@ Sprint {N} UI component dataset，供前端 engineer 開發。
 Refs #{design_issue_number}
 BODY
 )"
-gh pr ready "$DRAFT"
-gh pr checks "$DRAFT" --watch && gh pr merge "$DRAFT" --squash --delete-branch
+bash .claude/scripts/ready-and-merge.sh "$DRAFT"   # ready→等 CI→squash merge 三合一
 
 gh issue comment {design_issue_number} --body "🎨 Design PR: #${DRAFT}"
 gh issue comment {sprint_issue_number} --body "🎨 UI Component Dataset PR: #${DRAFT}"

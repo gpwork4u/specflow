@@ -146,20 +146,9 @@ fi
 1. CI build-and-lint 通過
 2. push 前 `local-checks.sh` 通過（engineer / qa agent 自己會跑）
 
-就可以直接 merge。Engineer / QA agent 在自己的 loop 裡發完 PR 就**自行 merge**：
+就可以直接 merge。Engineer / QA agent 在自己的 loop 裡發完 PR 就走 `ready-and-merge.sh` **自行 merge**（ready→等 CI→squash merge 三合一）。
 
-```bash
-# Engineer / QA agent loop 內的 merge 邏輯
-gh pr checks {pr_number} --watch  # 等 CI 跑完
-gh pr merge {pr_number} --squash --delete-branch  # build-and-lint 過就 merge
-```
-
-**為什麼不 per-PR review**：
-- per-PR 看不到跨 lane 對齊問題（frontend testid 對 qa testid 各自看都對，合起來不對）
-- Engineer 等 review 卡住 lane drain
-- 改成 sprint-end 一次完整 review 看到全貌、找問題更準
-
-Branch protection 配合改成只要 `build-and-lint` 過、不再要求 approval（見 `init-github.sh`）。
+Branch protection 配合改成只要 `build-and-lint` 過、不再要求 approval（見 `init-github.sh`）。理由見 `docs/DESIGN-RATIONALE.md`。
 
 ### Phase 4.9：Infra 確認（Sprint 測試前，需使用者確認）
 
@@ -258,13 +247,7 @@ fi
 - `success` → 進入 Phase 5.5 sprint code review → Phase 5.6 verifier
 - `failure` → workflow 已自動建 bug issue（lane label 從失敗推測）→ engineer lane 重啟修復 → bug close 自動觸發新 workflow run → orchestrator 重新進入 Phase 5 輪詢
 
-#### 為什麼 e2e 上 CI
-
-1. **可重現**：標準 ubuntu env，不受個別開發機影響
-2. **可見性**：team / 使用者直接看 actions tab，不用本機重跑
-3. **Artifacts 集中**：playwright trace / 截圖 / report 在 actions run 裡，30 天保留
-4. **Verifier 信任源**：直接讀 workflow conclusion，不用靠 state.json 自我宣告
-5. **解放本機**：orchestrator 不用佔用 docker port，可以同時做別的事
+> e2e 上 CI 的 5 點理由（可重現 / 可見性 / artifacts 集中 / verifier 信任源 / 解放本機）見 `docs/DESIGN-RATIONALE.md`。
 
 ### Phase 5.5：Sprint Code Review（背景自動，一次性全面審查）
 
