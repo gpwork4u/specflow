@@ -385,3 +385,51 @@ selftest 8/8 PASS。
 SpecFlow skill 現在從**用戶實際入口（/specflow:implement）**就能跑到 v6-level 可靠度（per-lane clone + deliver-first + sweep 兜底 + ready-merge）。先前 6 輪 benchmark 都繞過 skill 從主 session 手動 dispatch，P7.1 補上這個關鍵 gap。
 
 未驗證：P7 改動後的 skill 入口尚未跑過完整 benchmark（v7）。預期等同 v5/v6 但用戶 invoke 也能複現。
+
+---
+
+# Benchmark v7（P7 — 走 specflow:implement skill 入口驗證，2026-05-21）
+
+## 與前幾版的關鍵差異
+
+v1~v6 都從**主 session 手動 dispatch**。v7 **真正載入 `specflow:implement` skill 並依其文件流程執行**（dispatch-impl per-lane clone + lane-track + deliver-first + ready-and-merge + sweep）。這是用戶實際入口。
+
+## 結果
+
+| PR | 狀態 | 行數 | 驗證點 |
+|---|---|---:|---|
+| #12 qa | **MERGED** | 1367（71 tests）| P7.6 ready-and-merge.sh 生效 |
+| #14 backend F-001 | ready（未 merge）| 5002 | 撞 cap 在 merge 前（agent 去查 CI workflow 沒直接用 ready-and-merge）|
+| #13 design | draft | 32（**token 填真實值**）| P7.3 縮小 scaffold → token 是真值非 _TODO |
+| #11 frontend | draft | 79（scaffold）| P7.1 frontend-scaffold 生效 |
+
+## P7 各項驗證
+
+| P7.x | 驗證結果 |
+|---|---|
+| 7.1 skill 接 helper | ✅ skill 流程跑通：4 clone 建立、lane_state 記錄、4/4 PR 開、sweep 兜底 0 漏 |
+| 7.2 tech-lead push 自驗 | ✅ tech-lead 回報「git fetch 後 local==origin/main，確認 origin 含 commit」|
+| 7.3 design-scaffold 縮小 | ✅ token JSON 填真實 colors/spacing/typography（v6 是 _TODO 空殼）|
+| 7.5 lane_state | ✅ state.json.lane_state 4 lane clone_path 全記錄 |
+| 7.6 ready-and-merge | ✅ qa 用它 merge；backend 沒用（agent 自己去查 CI 卡住）|
+
+## 觀察
+
+- **skill 入口可用性確認**：用戶 invoke `/specflow:implement` 現在能跑到 per-lane 隔離 + deliver-first + 兜底，不再是 v1-level。
+- **merge rate 1/4（同 v6，低於 v5 2/4）**：backend 撞 cap 在 merge 前，原因是 agent 看到「CI 只有 security check 沒 build-lint」就去查 GitHub Actions workflow，沒直接用 `ready-and-merge.sh`（它本來就處理 no-CI 情況）。**這跟 frontend npm install 本能同類** — agent 傾向「先搞懂再動作」，沒信任 helper。
+- **per-lane clone 0 污染**：4 lane 各自 clone，分支內容不互相污染（污染檢查的 dev/test 顯示是 diff-base artifact，非真污染）。
+
+## 跨 7 版總表
+
+| 維度 | v1 | v2 | v3 | v4 | v5 | v6 | v7 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Agent-driven PR | 0/4 | 2/4 | 3/4 | 2/4 | 4/4 | 4/4 | **4/4** |
+| MERGED | 0 | 0 | 0 | 0 | 2 | 1 | 1 |
+| 入口 | 手動 | 手動 | 手動 | 手動 | 手動 | 手動 | **skill** |
+| 隔離 | 無 | 無 | 共寫 | clone | clone | clone | **clone(skill)** |
+
+## v7 結論
+
+**P7 達成主要目標：skill 入口可用**。reliability 的「PR 開創」已穩定 4/4。剩下的「merge rate 波動」根因是 **agent 在最後 merge / build verify 階段的『先搞懂再動作』本能**（backend 查 CI、frontend npm install），非基礎設施問題。
+
+下一步（若要追 100% merge）：在 engineer.md 加更硬規則「收尾只准跑 `ready-and-merge.sh`，禁止手動 `gh pr checks` 調查 CI 設定 — 沒 CI 就是過」。但這已是 agent 行為微調，邊際效益遞減。
