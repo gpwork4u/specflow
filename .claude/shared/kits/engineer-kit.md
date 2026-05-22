@@ -95,25 +95,13 @@ docker compose down
 
 ## 4. PR + auto-merge（deliver-first 絕對序列）
 
-### 4a. 認領 issue 後的前 4 個 Bash 呼叫（不可插別的 tool call）
+### 4a. 認領 issue 後第一個 Bash（deliver-first，不可插別的 tool call）
 
 ```bash
-# (1) fetch + rebase 防 race
-cd "$DEMO_DIR" && git fetch -q origin && git checkout main && git pull -q --rebase
-# (2) 開分支
-git checkout -b "feature/${ISSUE_NUM}-${SLUG}"
-# (3) empty commit 鎖 branch
-git commit --allow-empty -q -m "chore: [WIP] start #${ISSUE_NUM}"
-# (4) push + draft PR
-git push -u -q origin "feature/${ISSUE_NUM}-${SLUG}"
-DRAFT_PR=$(gh pr create --draft --title "[WIP] {Issue 標題}" \
-  --body "Closes #${ISSUE_NUM}
-
-[WIP] Implementation in progress." \
-  --label "feature,${LANE}" --milestone "${SPRINT}" --json number --jq .number)
+DRAFT_PR=$(bash .claude/scripts/deliver-first.sh "$ISSUE_NUM" "$SLUG" "$TITLE" "feature,$LANE")
 ```
 
-**完成這 4 步才能開始 Read spec / 寫 code / npm install**。為什麼這麼硬：v2 benchmark frontend agent 試 `npm install` 先沒推 → 沒 PR；qa commit 完忘 push → 沒 PR。絕對序列防止本能性「先驗證再 commit」。
+script 內部把 fetch+rebase → 開 branch → empty commit → push + 開 draft PR **4 步合 1 個 Bash**（含 retry / idempotent）。**完成這 1 個 Bash 才能開始 Read spec / 寫 code / npm install**——絕對序列防止本能性「先驗證再 commit」（v2 frontend 試 npm install 先沒推→沒 PR；qa commit 完忘 push→沒 PR）。**不要手打這 4 步，一律走 script**（手打版會繞過 retry / idempotent 防護）。
 
 ### 4b. 實作期間每 ~10 檔 commit + push（PR 自動跟上）
 
@@ -124,11 +112,10 @@ Refs #${ISSUE_NUM}"
 git push
 ```
 
-### 4c. 收尾改 ready + auto-merge
+### 4c. 收尾：先填 PR 真實 title/body，再走 ready-and-merge.sh
 
 ```bash
-PR_NUM="${DRAFT_PR}"
-gh pr edit "$PR_NUM" --title "{Issue 標題}" --body "$(cat <<'BODY'
+gh pr edit "$DRAFT_PR" --title "{Issue 標題}" --body "$(cat <<'BODY'
 ## Summary
 {實作摘要}
 ## Changes
@@ -144,9 +131,7 @@ gh pr edit "$PR_NUM" --title "{Issue 標題}" --body "$(cat <<'BODY'
 Closes #{issue_number}
 BODY
 )"
-gh pr ready "$PR_NUM"
-gh pr checks "$PR_NUM" --watch || { echo "🔴 build-and-lint 失敗，修完再來"; exit 1; }
-gh pr merge "$PR_NUM" --squash --delete-branch
+bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"   # ready→等 CI→squash merge 三合一；CI 紅 exit 1
 ```
 
 issue 回報：
