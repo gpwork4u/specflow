@@ -35,7 +35,13 @@ run_unit() {
 
 run_contract() {
   log "Contract check (grep)"
-  bash .claude/scripts/contract-check.sh || fail "Contract 違規"
+  # 用 --diff 只查「本分支相對 origin/main 的改動」，不是全 repo。
+  # 否則修了 contract-check 的 subshell bug 後，別的 lane 的既有 contract 債會卡死你的 push。
+  if git rev-parse --verify -q origin/main >/dev/null 2>&1; then
+    bash .claude/scripts/contract-check.sh --diff origin/main || fail "Contract 違規（本分支改動）"
+  else
+    bash .claude/scripts/contract-check.sh || fail "Contract 違規"
+  fi
 }
 
 run_e2e() {

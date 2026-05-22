@@ -71,10 +71,10 @@ Bash stderr `setValueForKeyFakeAssocArray` / `_encode` 雜訊忽略。「無進�
 1. **讀 design source + issue**（不 WebFetch 線上 — 本地快照是 SoT）：
    ```bash
    [ ! -f specs/design-source/index.html ] && { echo "🔴 design 快照不存在，請 spec-writer 先跑 sync-design.sh"; exit 1; }
-   cat specs/design-source.md
-   grep -oE 'data-testid="[^"]+"' specs/design-source/index.html | sort -u
-   grep -oE 'style="[^"]*color:[^;"]+' specs/design-source/index.html
-   grep -oE '<button[^>]*>[^<]+</button>' specs/design-source/index.html
+   head -20 specs/design-source.md   # 看攝取格式：bundle=元件在 *.jsx / html=在 index.html
+   SRC=$(ls specs/design-source/*.jsx 2>/dev/null || echo specs/design-source/index.html)
+   grep -rhoE 'data-testid="[^"]+"' $SRC | sort -u   # 設計若已含 testid 才抽得到（prototype 常為 0）
+   grep -rhoE '<button[^>]*>[^<]+</button>' $SRC
    gh issue view {design_issue_number} --json number,title,body
    cat specs/tech-survey.md
    ```
@@ -82,6 +82,7 @@ Bash stderr `setValueForKeyFakeAssocArray` / `_encode` 雜訊忽略。「無進�
 3. **建元件規格**：每元件 `design/components/{name}/{spec.md,example.tsx}`（格式 kit §3）。
 4. **建頁面 layout**：`design/pages/`（kit §4）。
 5. **寫 contract handoff**：`design/components-handoff.md`（testid）+ `design/ux-text-handoff.md`（字串）。
+   > **testid 來源規則**：Claude Design prototype **通常沒有 `data-testid`**（上面 grep 為 0 很正常）。此時你**依元件結構命名/發明 testid**（kebab-case，對應你在 design 看到的元件，如 `leave-request-card`、`approve-button`、`balance-summary`），這是**團隊新建的測試合約**，不是從 design 抽取。handoff 列出 testid ↔ 元件 對照，frontend engineer 實作時把這些 `data-testid` 加到元件上、qa 用同一份。design 若**已含** testid 則直接沿用、不改名。**字串**一律忠實照搬 design（這個必須抽取，不可發明）。
 6. **改 draft → ready + auto-merge + issue 回報**（kit §5：`gh pr ready` → CI 過 → merge）。
 7. **review**：sprint-end code-review 一次性處理（**無 per-PR review**）；若 review 產出需改動 → 變 issue，由 ui-designer 再認領處理（仍在 `design/` 範圍）。
 

@@ -39,7 +39,7 @@ echo "✅ Sprint $SPRINT_NUM scope: $FIDS"
 
 `specs/contracts/{api,dom,ux-text}.md` + `specs/contracts.ts` 是**所有 lane 的 single source of truth**。沒先有 contract，engineer/qa 同時動手必出現 testid/path/字串互不對齊的災難。範本見 kit §3。
 
-> **Design-led 專案特殊規則**：若 `specs/design-source.md` 存在，`contracts/dom.md` 與 `ux-text.md` **直接抄自 ui-designer handoff**（`design/components-handoff.md` → dom.md；`design/ux-text-handoff.md` → ux-text.md）。不自創 testid/UI 字串；handoff 有缺漏先回去找 ui-designer 補。`contracts/api.md` 仍由 tech-lead 設計（API 在 design 上看不到）。
+> **Design-led 專案特殊規則**：若 `specs/design-source.md` 存在，`contracts/dom.md` 與 `ux-text.md` **直接抄自 ui-designer handoff**（`design/components-handoff.md` → dom.md；`design/ux-text-handoff.md` → ux-text.md）。**testid**：ui-designer 已負責「design 有就沿用、沒有（prototype 常態）就依元件結構發明」，你照單吸收即可，不另起一套命名跟它打架。**UI 字串**：必須忠實照 design，不自創。handoff 有缺漏先回去找 ui-designer 補。`contracts/api.md` 仍由 tech-lead 設計（API 在 design 上看不到）。
 
 寫完 contract 後 commit，**必須 push 到 origin/main 並自驗成功**（hard rule — v5 曾因 push 被擋沒 retry，導致 per-lane clone 抓不到 contract）：
 

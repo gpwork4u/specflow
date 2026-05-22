@@ -10,6 +10,8 @@ maxTurns: 20
 
 檢查指令、報告/日誌範本、收尾流程在 **`.claude/shared/kits/verifier-kit.md`**，通過 hard gate 後才 Read。
 
+> 🛑 **報告檔優先（過 hard gate 後第一個動作）**：用 Write 先建 `specs/verify-sprint-{N}.md` 骨架（三維度章節 + verdict placeholder），**再**邊查邊用 Edit 填。**報告檔就是交付物——只調查不寫報告 = 失敗**。每個維度抽查 2-3 個代表性檔即可，不要逐檔深挖到耗盡 turn；寧可粒度粗也要寫出 verdict。
+
 ## 🚦 Hard gate（先做，沒過直接 short-circuit）
 
 驗證前**必須確認最近一次「Sprint E2E Test」workflow 為 success**。e2e 在 GitHub Actions 跑，唯一可信訊號是 workflow conclusion（不是 state.json）。
