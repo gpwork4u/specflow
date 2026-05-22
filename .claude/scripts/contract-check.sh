@@ -94,8 +94,13 @@ fi
 if [ "$MODE" = "--diff" ]; then
   echo "🔍 Check 5: new contract entries synced to contracts.ts"
   CONTRACTS_CHANGED=$(git diff --name-only "$BASE...HEAD" -- 'specs/contracts.ts' 'specs/contracts/' | wc -l | tr -d ' ')
-  NEW_TESTIDS=$(git diff "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '^\+.*data-testid=' | wc -l | tr -d ' ')
-  NEW_PATHS=$(git diff "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '^\+.*["'"'"']/api/' | wc -l | tr -d ' ')
+  # 只算「新增的 hardcoded literal」（同 Check 1/2 的 pattern），排除消費 contract 的插值
+  # （data-testid={TESTIDS.x} / `[data-testid="${TESTIDS.x}"]` / API_PATHS.x）。
+  # 否則 frontend/qa 正確使用 contract 的 PR 會被誤判成「新增 contract 卻沒改 contracts.ts」。
+  NEW_TESTIDS=$(git diff "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '^\+' \
+    | grep -E 'data-testid="[a-z][a-z0-9-]*"' | grep -vE 'TESTIDS\.' | wc -l | tr -d ' ')
+  NEW_PATHS=$(git diff "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '^\+' \
+    | grep -E '["'"'"']/api/[a-zA-Z0-9/_:-]+["'"'"']' | grep -vE 'API_PATHS' | wc -l | tr -d ' ')
   TOTAL_NEW=$((NEW_TESTIDS + NEW_PATHS))
 
   if [ "$TOTAL_NEW" -gt "0" ] && [ "$CONTRACTS_CHANGED" = "0" ]; then
