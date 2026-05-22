@@ -42,12 +42,14 @@ isolation: worktree
 | **1** | 認領 issue 後**第一個 Bash 必須是** `deliver-first.sh`（見下，draft PR 落 GitHub）|
 | **2** `[frontend]` | **第二個 Bash 必須是** `frontend-scaffold.sh "$ISSUE_NUM"`（建 Vite+React+TS+Tailwind 骨架 + commit + push，**不跑 npm install**）|
 | **3** `[frontend]` | 讀 `specs/design-source/` 本地快照（見下 pixel-perfect gate）|
-| **4** | 讀 issue + spec：`gh issue view {n} --json body`；`cat specs/features/f{N}-*.md overview.md dependencies.md`。bug 額外讀失敗 scenario + 重現步驟 |
+| **4** | 讀 issue + spec：`gh issue view {n} --json body`；`cat specs/features/f{N}-*.md specs/overview.md specs/dependencies.md`。bug 額外讀失敗 scenario + 重現步驟 |
 | **5** | 實作（`dev/` 下）：依 API contract / bug 描述，遵循 overview.md 架構 + 既有風格；寫 unit tests；維護 compose；自驗所有 AC。**每 ~10 檔跑 `commit-progress.sh "feat: <progress>" "$ISSUE_NUM"` push 一次** |
 | **6** | push 前 / merge 前跑 `bash .claude/scripts/local-checks.sh`（unit + contract，任一紅不准 ready）|
 | **7** | 收尾**只准跑** `bash .claude/scripts/ready-and-merge.sh "$DRAFT_PR"`（ready→等 CI→squash merge 三合一；CI 紅會 exit 1 讓你去修）→ issue 回報（kit §4）→ loop 下一個 issue |
 
 > **npm install / 完整 build verify 留到 Step 6/7 或交給 CI，不要在 Step 1-4 之間跑**（v3/v5 frontend 撞 cap 主因）。
+> **docker 自驗（kit §3 的 `docker compose up` + curl health）是 Step 5 開發期的選配**，不是收尾 gate：本機沒起 DB 也沒關係，整合留給 sprint e2e。收尾只跑 `local-checks.sh`（unit+contract）+ `ready-and-merge.sh`，**別為了「確認服務能起」在 push 前補跑 docker**（與「收尾禁止先搞懂」一致）。
+> **turn 將盡時優先保 deliverable**：loop 清空 lane 時若 turn 快用完，先把當前 issue 的進度 `commit-progress.sh` push 上去（draft PR 不會丟），再停，不要硬撐做完整個 issue 而讓未 push 的工作隨 cap 蒸發。
 
 ### Step 1 🛑 deliver-first（所有 lane）
 

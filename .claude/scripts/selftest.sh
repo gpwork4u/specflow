@@ -37,13 +37,25 @@ for s in "$SC"/*.sh; do
 done
 [ "$SYN_OK" -eq 1 ] && ok "全部 .sh 腳本語法正確（$(ls "$SC"/*.sh | wc -l | tr -d ' ') 支）"
 
-# ---- 4. contract-check.sh 能擋 hardcoded 違規（specflow 核心防漂移）----
-if [ -f "$SC/contract-check.sh" ]; then
-  sh -n "$SC/contract-check.sh" 2>/dev/null \
-    && ok "contract-check.sh 可執行（contracts 三件套防線）" \
-    || bad "contract-check.sh 語法錯誤"
+# ---- 4. contract-check.sh 真的會擋 hardcoded 違規（specflow 核心防漂移）----
+# 不只驗語法 — 驗「違規 exit 1 / 乾淨 exit 0」。曾因 VIOLATIONS 在 subshell 累加而永遠 exit 0。
+if [ -f "$SC/contract-check.sh" ] && sh -n "$SC/contract-check.sh" 2>/dev/null; then
+  CC=$(mktemp -d); mkdir -p "$CC/dev/src" "$CC/specs"
+  printf 'export const API_PATHS = { me: "/api/v1/me" };\n' > "$CC/specs/contracts.ts"
+  # 違規檔（單引號 path，舊版漏網）→ 必須 exit 1（用 if 包裹，否則 set -e 會在此中斷）
+  printf "const x = '/api/v1/x';\n" > "$CC/dev/src/a.ts"
+  if ROOT="$CC" sh "$SC/contract-check.sh" >/dev/null 2>&1; then RC_BAD=0; else RC_BAD=$?; fi
+  # 乾淨檔 → 必須 exit 0
+  printf "import { API_PATHS } from '../../specs/contracts';\nfetch(API_PATHS.me);\n" > "$CC/dev/src/a.ts"
+  if ROOT="$CC" sh "$SC/contract-check.sh" >/dev/null 2>&1; then RC_OK=0; else RC_OK=$?; fi
+  rm -rf "$CC"
+  if [ "$RC_BAD" -eq 1 ] && [ "$RC_OK" -eq 0 ]; then
+    ok "contract-check.sh 真的會擋（違規 exit 1 / 乾淨 exit 0，含單引號 path）"
+  else
+    bad "contract-check.sh 失效（違規 rc=$RC_BAD 應為 1；乾淨 rc=$RC_OK 應為 0）"
+  fi
 else
-  bad "contract-check.sh 不存在（specflow 防漂移核心）"
+  bad "contract-check.sh 不存在或語法錯誤（specflow 防漂移核心）"
 fi
 
 # ---- 5. doctor.sh 可跑且不誤殺 ----
