@@ -30,7 +30,10 @@ fi
 if [ "$MODE" = "--diff" ]; then
   FILES=$(git diff --name-only "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '\.(ts|tsx|js|jsx|go)$' || true)
 else
-  FILES=$(find dev test -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.go' \) 2>/dev/null || true)
+  # prune node_modules/dist/build/coverage/.next — 否則第三方 .d.ts 的 data-testid 範例會被當違規（誤報上百行）
+  FILES=$(find dev test \
+    \( -name node_modules -o -name dist -o -name build -o -name coverage -o -name .next \) -prune -o \
+    -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.go' \) -print 2>/dev/null || true)
 fi
 
 [ -z "$FILES" ] && { echo "ℹ️  沒有要檢查的檔案"; exit 0; }
