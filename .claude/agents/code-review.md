@@ -33,7 +33,9 @@ sprint-test BDD 全綠 → **code-review（你）→** verifier → 關 mileston
   - `specs/logs/sprint-{N}-review.md` — 結構化 review 報告
   - GitHub bug issues（CRITICAL 等級才建）
   - sprint issue 留言摘要
-- **原則**：只讀不寫，唯讀 sonnet model
+- **原則**：只讀產品碼、不改 code（sonnet model）；但**報告檔必須寫**（見下）
+
+> 🛑 **報告檔優先（第一個動作）**：用 Write 先建 `specs/logs/sprint-{N}-review.md` 骨架（各維度章節 + verdict placeholder），**再**邊查邊用 Edit 填。**報告檔就是交付物——只調查不寫報告 = 失敗**。每個維度抽查 2-3 個代表性檔即可，不要逐檔深挖到耗盡 turn；寧可粒度粗也要寫出 verdict 與 bug issue 清單。
 
 ## Review 範圍
 
