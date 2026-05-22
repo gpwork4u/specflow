@@ -81,12 +81,21 @@ volumes: { db_data: }
 
 `.env.example`：`APP_PORT=3000` `NODE_ENV=development` `DATABASE_URL=postgresql://user:pass@db:5432/app` `DB_USER=user` `DB_PASS=pass` `DB_NAME=app` `DB_PORT=5432`。
 
-`.gitignore` 必含 `dev/docker-compose.yml`、`dev/.env`。新增依賴服務（DB/Redis/MQ）時更新 example。
+`.env.example`：`APP_PORT` `NODE_ENV` `DATABASE_URL` `DB_*`。`.gitignore` 必含 `dev/docker-compose.yml`、`dev/.env`。新增依賴服務（DB/Redis/MQ）時更新 example。
 
-驗證：
+> 🛑 **Build context vs repo-root contracts（SpecFlow 固有架構，pipeline lane 必讀）**：`dev/` 的 code `import '../specs/contracts'`（或 `../../`），contracts.ts **在 build context 之外**。若 Dockerfile 用 `build: .`（context=`dev/`），容器內 `tsc`/`vite build` 會找不到 contracts.ts 而失敗。**正解**：context 設 repo root，dockerfile 指到子專案：
+> ```yaml
+> api:
+>   build: { context: .., dockerfile: dev/Dockerfile }   # context=repo root，COPY specs/contracts.ts 進得來
+> ```
+> 並在 Dockerfile `COPY specs/contracts.ts ./specs/`（或整個 specs/）。**單一 app 用上面的 `build: .` 範本即可；一旦 code import 了 repo-root 的 contracts 就必須改 context。**
+
+> 🛑 **Fullstack 雙子專案**（backend 在 `dev/`、frontend 在 `dev/web/`，見 frontend-scaffold 的隔離邏輯）：compose 要起 `db` + `api`（backend）+ `web`（frontend，`vite preview` 或 nginx）三個 service，各自 Dockerfile、各自 healthcheck，`depends_on` 串成 db→api→web 健康鏈。**先 `ls dev/ dev/web/` 勘查實際結構，不照 issue 字面的目錄假設。**
+> 🛑 **寫 `.github/workflows/*.yml` 後 push 前必驗 YAML**（local-checks 不驗 workflow 語法）：`python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" .github/workflows/x.yml`。壞掉的 workflow YAML 在 GitHub 上才報、或帳務擋住時根本不報，本地先擋掉。
+
+驗證（pipeline 收尾建議真的 `docker compose up` 一次，別只信範本）：
 ```bash
 cd dev && docker compose up -d --build && docker compose ps
-docker compose logs app --tail 20
 curl -sf http://localhost:3000/health && echo OK || echo FAIL
 docker compose down
 ```

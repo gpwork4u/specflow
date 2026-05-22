@@ -13,15 +13,27 @@ set -e
 ISSUE_NUM="$1"
 [ -z "$ISSUE_NUM" ] && { echo "Usage: $0 <issue_num>" >&2; exit 2; }
 
-mkdir -p dev/src/{components,pages,api,lib} dev/public
+# 決定前端目錄：若 dev/ 已有「非前端」package.json（backend 同居一個 dev/），
+# scaffold 進 dev/web/ 隔離，**絕不覆蓋 backend 的 package.json / tsconfig.json**。
+# 純前端專案（dev/ 無 package.json 或本來就是 react）維持 dev/ 根（向後相容）。
+if [ -f dev/package.json ] && ! grep -q '"react"' dev/package.json; then
+  WEB_DIR="dev/web"
+  SPECS_REL="../../specs/contracts.ts"
+  echo "ℹ️  偵測到 dev/ 已有 backend package.json → 前端 scaffold 隔離到 dev/web/（不覆蓋 backend）"
+else
+  WEB_DIR="dev"
+  SPECS_REL="../specs/contracts.ts"
+fi
+
+mkdir -p "$WEB_DIR"/src/{components,pages,api,lib} "$WEB_DIR/public"
 
 # 已有骨架就 skip（idempotent）
-if [ -f dev/package.json ] && [ -f dev/vite.config.ts ]; then
-  echo "(scaffold 已存在，skip)"
+if [ -f "$WEB_DIR/package.json" ] && [ -f "$WEB_DIR/vite.config.ts" ]; then
+  echo "(scaffold 已存在於 $WEB_DIR，skip)"
   exit 0
 fi
 
-cat > dev/package.json <<'EOF'
+cat > "$WEB_DIR"/package.json <<'EOF'
 {
   "name": "leave-frontend",
   "version": "0.1.0",
@@ -49,7 +61,7 @@ cat > dev/package.json <<'EOF'
 }
 EOF
 
-cat > dev/tsconfig.json <<'EOF'
+cat > "$WEB_DIR"/tsconfig.json <<EOF
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -60,13 +72,13 @@ cat > dev/tsconfig.json <<'EOF'
     "esModuleInterop": true,
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM"],
-    "paths": { "@contracts": ["../specs/contracts.ts"] }
+    "paths": { "@contracts": ["${SPECS_REL}"] }
   },
   "include": ["src"]
 }
 EOF
 
-cat > dev/vite.config.ts <<'EOF'
+cat > "$WEB_DIR"/vite.config.ts <<'EOF'
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 export default defineConfig({
@@ -75,7 +87,7 @@ export default defineConfig({
 });
 EOF
 
-cat > dev/index.html <<'EOF'
+cat > "$WEB_DIR"/index.html <<'EOF'
 <!doctype html>
 <html lang="zh-Hant">
   <head>
@@ -90,7 +102,7 @@ cat > dev/index.html <<'EOF'
 </html>
 EOF
 
-cat > dev/src/main.tsx <<EOF
+cat > "$WEB_DIR"/src/main.tsx <<EOF
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -101,20 +113,20 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 EOF
 
-cat > dev/src/App.tsx <<EOF
+cat > "$WEB_DIR"/src/App.tsx <<EOF
 // [WIP] Stub — implementation in progress (Refs #${ISSUE_NUM})
 export default function App() {
   return <div className="p-8">WIP — frontend MVP scaffolding</div>;
 }
 EOF
 
-cat > dev/src/index.css <<'EOF'
+cat > "$WEB_DIR"/src/index.css <<'EOF'
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 EOF
 
-cat > dev/tailwind.config.js <<'EOF'
+cat > "$WEB_DIR"/tailwind.config.js <<'EOF'
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -123,7 +135,7 @@ export default {
 };
 EOF
 
-cat > dev/postcss.config.js <<'EOF'
+cat > "$WEB_DIR"/postcss.config.js <<'EOF'
 export default { plugins: { tailwindcss: {}, autoprefixer: {} } };
 EOF
 

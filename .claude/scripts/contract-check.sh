@@ -30,16 +30,19 @@ fi
 if [ "$MODE" = "--diff" ]; then
   FILES=$(git diff --name-only "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '\.(ts|tsx|js|jsx|go)$' || true)
 else
-  FILES=$(find dev test -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.go' \) 2>/dev/null || true)
+  # prune node_modules/dist/build/coverage/.next — 否則第三方 .d.ts 的 data-testid 範例會被當違規（誤報上百行）
+  FILES=$(find dev test \
+    \( -name node_modules -o -name dist -o -name build -o -name coverage -o -name .next \) -prune -o \
+    -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.go' \) -print 2>/dev/null || true)
 fi
 
 [ -z "$FILES" ] && { echo "ℹ️  沒有要檢查的檔案"; exit 0; }
 
 VIOLATIONS=0
-report() {
-  echo "❌ $1"
-  VIOLATIONS=$((VIOLATIONS + 1))
-}
+# 注意：report() 過去被放在 `echo|while` 的 subshell 裡，VIOLATIONS++ 不會回傳主 shell，
+# 導致 check 永遠 exit 0（從不擋 PR）。改為各 check 區塊在主 shell 用 add_violations 累加。
+report() { echo "❌ $1"; }
+add_violations() { VIOLATIONS=$((VIOLATIONS + $(printf '%s\n' "$1" | grep -c .))); }
 
 # 1. Hardcoded testid 字面值（僅 .ts/.tsx 檢查；.spec.ts、.feature 寫的 step 也檢查）
 echo "🔍 Check 1: hardcoded data-testid"
@@ -48,17 +51,19 @@ if [ -n "$HITS" ]; then
   echo "$HITS" | while IFS= read -r line; do
     report "$line  ← 改 data-testid={TESTIDS.xxx}"
   done
+  add_violations "$HITS"
 fi
 
 # 2. Hardcoded /api/ 路徑字串（fetch / axios / mux.HandleFunc 等）
 echo "🔍 Check 2: hardcoded /api/ paths"
-HITS=$(echo "$FILES" | xargs grep -nE '"/api/[a-zA-Z0-9/_:-]+"' 2>/dev/null \
+HITS=$(echo "$FILES" | xargs grep -nE '["'"'"']/api/[a-zA-Z0-9/_:-]+["'"'"']' 2>/dev/null \
   | grep -vE '(specs/contracts\.ts|specs/contracts/api\.md)' \
   | grep -vE '//\s*allow-hardcoded-path' || true)
 if [ -n "$HITS" ]; then
   echo "$HITS" | while IFS= read -r line; do
     report "$line  ← 改 API_PATHS.xxx"
   done
+  add_violations "$HITS"
 fi
 
 # 3. Hardcoded toast / 中文 UI 字串
@@ -70,6 +75,7 @@ if [ -n "$HITS" ]; then
   echo "$HITS" | while IFS= read -r line; do
     report "$line  ← 改 toast.xxx(TOAST.yyy)"
   done
+  add_violations "$HITS"
 fi
 
 # 4. Playwright locator 中 hardcoded testid
@@ -81,18 +87,25 @@ if [ -n "$HITS" ]; then
   echo "$HITS" | while IFS= read -r line; do
     report "$line  ← 改 page.locator(\`[data-testid=\"\${TESTIDS.xxx}\"]\`) 或 getByTestId(TESTIDS.xxx)"
   done
+  add_violations "$HITS"
 fi
 
 # 5. 偵測新增 testid / api path 是否同步更新 contracts.ts
 if [ "$MODE" = "--diff" ]; then
   echo "🔍 Check 5: new contract entries synced to contracts.ts"
   CONTRACTS_CHANGED=$(git diff --name-only "$BASE...HEAD" -- 'specs/contracts.ts' 'specs/contracts/' | wc -l | tr -d ' ')
-  NEW_TESTIDS=$(git diff "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '^\+.*data-testid=' | wc -l | tr -d ' ')
-  NEW_PATHS=$(git diff "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '^\+.*"/api/' | wc -l | tr -d ' ')
+  # 只算「新增的 hardcoded literal」（同 Check 1/2 的 pattern），排除消費 contract 的插值
+  # （data-testid={TESTIDS.x} / `[data-testid="${TESTIDS.x}"]` / API_PATHS.x）。
+  # 否則 frontend/qa 正確使用 contract 的 PR 會被誤判成「新增 contract 卻沒改 contracts.ts」。
+  NEW_TESTIDS=$(git diff "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '^\+' \
+    | grep -E 'data-testid="[a-z][a-z0-9-]*"' | grep -vE 'TESTIDS\.' | wc -l | tr -d ' ')
+  NEW_PATHS=$(git diff "$BASE...HEAD" -- 'dev/**' 'test/**' | grep -E '^\+' \
+    | grep -E '["'"'"']/api/[a-zA-Z0-9/_:-]+["'"'"']' | grep -vE 'API_PATHS' | wc -l | tr -d ' ')
   TOTAL_NEW=$((NEW_TESTIDS + NEW_PATHS))
 
   if [ "$TOTAL_NEW" -gt "0" ] && [ "$CONTRACTS_CHANGED" = "0" ]; then
     report "PR 新增了 $TOTAL_NEW 處 testid/path，但 specs/contracts.ts 或 specs/contracts/*.md 都沒動。任何新 contract entry 必須先寫進 contracts.ts。"
+    VIOLATIONS=$((VIOLATIONS + 1))
   fi
 fi
 

@@ -90,9 +90,29 @@ tech-lead：
 
 > **Design-led 順序提示**：理想上 ui-designer 應**先於** tech-lead 完成 contract phase（因為 dom.md / ux-text.md 要吸 ui-designer 的 handoff）。orchestrator 可以先開 design issue → ui-designer 完成 handoff → tech-lead 才產 contracts → 才開 feature/qa issues。
 
+### Phase 3.8：把 specs/ commit 進 main（hard gate — 否則 lane agent 讀不到）
+
+spec-writer 與 tech-lead 寫的 `specs/`（overview / features / sprints / contracts / contracts.ts / dependencies）若還停在 working tree **未進版控**，worktree-isolated 的 engineer/qa/ui-designer 從 origin clone 後**完全讀不到 spec 與 contract**，整個 sprint 會憑空亂寫。spawn lane 前必須確認 specs/ 已在 main：
+
+```bash
+cd <project-root>
+if [ -n "$(git status --porcelain specs/)" ]; then
+  git add specs/
+  git commit -q -m "docs(spec): sprint 規劃產出（spec + contracts）納入版控"
+  git push -q origin main || {
+    # main 受保護無法直推 → 開 PR 合併
+    git checkout -b "chore/sprint-specs" && git push -u -q origin chore/sprint-specs
+    PR=$(gh pr create --title "docs(spec): sprint specs + contracts" --body "spec-writer + tech-lead 產出" --json number --jq .number)
+    gh pr merge "$PR" --squash --delete-branch && git checkout main && git pull -q
+  }
+fi
+# 確認 contract 三件套 + contracts.ts 確實在 main 上（讀不到就 short-circuit）
+git cat-file -e "main:specs/contracts.ts" 2>/dev/null || { echo "🔴 specs/contracts.ts 不在 main，lane agent 會讀不到，停"; exit 1; }
+```
+
 ### Phase 3.9：記錄 sprint_base_sha（給 sprint-end review 用）
 
-在啟動 lane 前先把當前 main HEAD 紀錄起來，這是 sprint review 的 diff 起點：
+在啟動 lane 前先把當前 main HEAD 紀錄起來，這是 sprint review 的 diff 起點（須在 Phase 3.8 commit 之後）：
 
 ```bash
 SPRINT_BASE=$(git rev-parse main)
